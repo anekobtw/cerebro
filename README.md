@@ -5,28 +5,42 @@ Hackathon monorepo for the Blind Maps mobile assistant. Development runs locally
 ## Prerequisites
 
 - Node.js 24.21.0 and npm 11.19.0.
-- A Pixel or Android emulator with USB debugging enabled.
+- A phone
 - JDK 21 and the Android SDK for a local development build.
 
 ## Setup
 
 ```sh
 npm ci
-cp .env.example .env
 ```
 
-Set the provider values in the root `.env`. The development app receives these values through Expo configuration, so use restricted development credentials, never commit `.env`, and rotate the credentials after the hackathon.
+Create the root `.env` with restricted development credentials. The file is ignored by Git; never commit it, and rotate its keys after the hackathon.
 
-Google Routes stays off unless `GOOGLE_ROUTES_ENABLED=true`. It also needs a restricted `GOOGLE_MAPS_API_KEY`. On the surveyed route the app makes at most one route request per navigation session and uses the surveyed fallback on an API error, timeout, or rejected path.
+```dotenv
+GEMINI_API_KEY=...
 
-Spoken destinations need `GOOGLE_PLACES_ENABLED=true` as well, with the Places API enabled on the same key. Say a destination, confirm the place the assistant reads back, and GPS guidance speaks each walking step. Guidance stops at `NAV_ARRIVAL_RADIUS_M` and hands the last stretch to the camera, because a GPS fix cannot find a door. Going off route costs one recalculation, capped by `NAV_MAX_REROUTES_PER_SESSION`.
+ELEVENLABS_API_KEY=...
+ELEVENLABS_VOICE_ID=...
+ELEVENLABS_TTS_MODEL_ID=...
+ELEVENLABS_TTS_OUTPUT_FORMAT=pcm_24000
+
+GOOGLE_PLACES_ENABLED=true
+GOOGLE_PLACES_REGION=us
+GOOGLE_ROUTES_ENABLED=true
+GOOGLE_MAPS_API_KEY=...
+```
+
+`GEMINI_SCENE_MODEL` is optional and defaults to `gemini-3.5-flash-lite`. `ELEVENLABS_REALTIME_STT_MODEL_ID` is optional and defaults to `scribe_v2_realtime`.
+
+Spoken destination search requires both `GOOGLE_PLACES_ENABLED=true` and `GOOGLE_ROUTES_ENABLED=true`, plus a restricted `GOOGLE_MAPS_API_KEY` with the **Places API** and **Routes API** enabled. The same key serves both APIs. `GOOGLE_PLACES_REGION` is optional country context; keep `us` for US searches or omit it for region-neutral matching.
+
+The remaining Maps/navigation tuning variables are optional. Omit them to use the built-in defaults: a 3,000 m search radius, 5,000 ms Maps request timeout, 30 m arrival radius, at most three reroutes per session, and a 30-second reroute cooldown.
 
 ## Run on Android
 
 The app uses native modules that Expo Go does not include. Build and install the development app on the connected phone:
 
 ```sh
-cd apps/mobile
 npx expo run:android
 ```
 
@@ -36,12 +50,5 @@ The command builds the debug app, installs it, and starts Metro. For later start
 npm run dev
 ```
 
-This configures `adb reverse` for Metro on port 8081, starts Expo on an externally reachable listener while advertising the USB-forwarded loopback address, and opens the development client on the connected phone. Rebuild after changing native dependencies, Expo plugins, permissions, or the Expo SDK.
+This configures `adb reverse` for Metro on port 8081, starts Expo on an externally reachable listener while advertising the USB-forwarded loopback address, and opens the development client on the connected phone. Rebuild after changing `.env`, native dependencies, Expo plugins, permissions, or the Expo SDK.
 
-## Checks
-
-```sh
-npm run typecheck
-```
-
-See [the phase 2 runbook](docs/PHASE_2_RUNBOOK.md) for the media checks and [the phase 3 runbook](docs/PHASE_3_RUNBOOK.md) for route activation and on-phone checks. Live route guidance remains locked until [the field survey](docs/FIELD_SURVEY.md) contains real measurements.
