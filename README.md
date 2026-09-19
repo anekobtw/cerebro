@@ -45,19 +45,19 @@ Open the installed Blind Maps development app and scan the displayed QR code. Re
 
 ## Continuous Expo updates
 
-`.github/workflows/expo-ota.yml` publishes an EAS Update to the `production` branch after every push that changes `apps/**`. Before the workflow can publish or a device can receive updates, configure the Expo project once:
+`.github/workflows/expo-ota.yml` publishes an EAS Update to the `production` channel after every push that changes `apps/**`. Add an `EXPO_TOKEN` Actions secret to the GitHub repository before using the workflow. Store the app's `EXPO_PUBLIC_*` values in the EAS `production` environment. The preview build and OTA workflow both read that environment, so they compile the same provider settings into the app.
+
+Install a preview APK on each hackathon phone. Preview builds launch without Metro and receive updates from the `production` channel:
 
 ```sh
 cd apps/mobile
 npx --yes eas-cli@24.7.0 login
-npx --yes eas-cli@24.7.0 init --account kharitonovs-team --non-interactive
-npx --yes eas-cli@24.7.0 update:configure
-npx --yes eas-cli@24.7.0 build --profile development --platform android
+npx --yes eas-cli@24.7.0 build --profile preview --platform android
 ```
 
-`init` creates and records the EAS project ID in `app.json`; `update:configure` adds the update URL and runtime-version policy. Commit those `app.json` changes before installing the newly built APK on the phone. In the GitHub repository, add an `EXPO_TOKEN` Actions secret created with `npx --yes eas-cli@24.7.0 token:create`.
+After GitHub Actions publishes an update, force close and reopen the app. Expo may download the update during that launch, so force close and reopen it a second time if the old version appears. JavaScript and asset changes can ship over OTA. Native dependencies, Expo config plugins, permissions, runtime versions, and Expo SDK changes require a new APK.
 
-The installed development build is pinned to the `production` update channel. On its next launch or reload after a successful workflow, it downloads a compatible JavaScript/assets update; reopen it once more if Expo downloads the update in the background. Native dependency, Expo config/plugin, permission, runtime-version, or SDK changes are not OTA-compatible and require another APK build and install.
+Use the `development` build profile for local Metro work. A development build opens the Expo developer launcher and does not behave like the standalone preview APK used for OTA testing.
 
 ## Commands
 

@@ -31,16 +31,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Configure EAS Update
-        working-directory: apps/mobile
-        run: |-
-          npx --no-install eas init --account kharitonovs-team --non-interactive
-          npx --no-install eas update:configure --non-interactive
-
       - name: Publish update
         working-directory: apps/mobile
         run: >-
           npx --no-install eas update
-          --branch production
+          --channel production
+          --environment production
           --message "GitHub Actions ${GITHUB_SHA}"
           --non-interactive

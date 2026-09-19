@@ -17,6 +17,7 @@
     },
     "preview": {
       "channel": "production",
+      "environment": "production",
       "developmentClient": false,
       "distribution": "internal",
       "android": {

@@ -3,6 +3,12 @@
     "name": "Blind Maps",
     "slug": "blind-maps",
     "version": "0.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d9c56b6c-b295-4600-b254-1db5ac56b077"
+    },
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "android": {
