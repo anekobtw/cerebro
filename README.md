@@ -4,11 +4,11 @@ Hackathon monorepo for the Blind Maps mobile assistant.
 
 ## Prerequisites
 
-- Node.js 24.21.0 and npm 11.19.0. With [nvm](https://github.com/nvm-sh/nvm):
+- Node.js 24.21.0 and npm 11.19.0. Install this Node.js release through your operating system's package manager or from [nodejs.org](https://nodejs.org/), then verify:
 
   ```sh
-  nvm install
-  nvm use
+  node --version
+  npm --version
   ```
 
 - An Expo account for installing development builds on a physical device.
