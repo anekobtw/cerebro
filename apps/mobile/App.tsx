@@ -1,4 +1,5 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
+import * as Location from "expo-location";
 import { StatusBar } from "expo-status-bar";
 import { AudioManager } from "react-native-audio-api";
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -52,6 +53,9 @@ export default function App(): JSX.Element {
     if (await AudioManager.checkRecordingPermissions() !== "Granted") {
       await AudioManager.requestRecordingPermissions();
     }
+    if (!(await Location.getForegroundPermissionsAsync()).granted) {
+      await Location.requestForegroundPermissionsAsync();
+    }
     await controller.start(permission.granted);
   }, [cameraPermission, controller, requestCameraPermission]);
 
@@ -84,7 +88,8 @@ export default function App(): JSX.Element {
         </Text>
         {active && (
           <Text style={styles.destination}>
-            Say "pause" to pause or resume, "repeat" to choose a destination again, or "end assistant".
+            Say "repeat" for the next instruction, "where am I" for distance and direction, "change
+            destination" to pick somewhere else, "pause", or "stop".
           </Text>
         )}
 

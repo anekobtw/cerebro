@@ -1,5 +1,8 @@
 import type {
+  DynamicRoute,
+  DynamicRouteStep,
   GeoPoint,
+  PlaceCandidate,
   RouteManifest,
   SessionOutdoorRoute,
 } from "@blind-maps/contracts";
@@ -67,6 +70,7 @@ const routeResponseSchema = z.object({
 
 export interface GoogleRouteCandidate {
   geometry: GeoPoint[];
+  steps: DynamicRouteStep[];
   distanceMeters: number;
   durationSeconds: number | null;
   warnings: string[];
@@ -202,8 +206,10 @@ export async function requestGoogleWalkingRoute(options: {
         "X-Goog-FieldMask": GOOGLE_ROUTES_FIELD_MASK,
       },
       body: JSON.stringify({
-        origin: { location: { latLng: options.origin } },
-        destination: { location: { latLng: options.destination } },
+        // Callers pass richer objects than GeoPoint, and the API rejects any
+        // extra field inside latLng, so send the two coordinates only.
+        origin: { location: { latLng: latLngOf(options.origin) } },
+        destination: { location: { latLng: latLngOf(options.destination) } },
         travelMode: "WALK",
         languageCode: "en-US",
         units: "METRIC",
@@ -259,12 +265,81 @@ export async function requestGoogleWalkingRoute(options: {
   }
   return {
     geometry,
+    steps: walkingSteps(route.legs),
     distanceMeters: route.distanceMeters,
     durationSeconds: parseDurationSeconds(route.duration),
     warnings: route.warnings,
     snappedStart: geometry[0],
     snappedEnd: geometry[geometry.length - 1],
   };
+}
+
+/**
+ * The spoken-destination path. It has no surveyed corridor to check the result
+ * against, so the route is used as returned and guidance stops at the arrival
+ * radius rather than claiming to reach a door.
+ */
+export async function requestDynamicRoute(options: {
+  apiKey: string | undefined;
+  origin: GeoPoint;
+  destination: PlaceCandidate;
+  timeoutMs: number;
+  fetchImpl?: typeof fetch;
+}): Promise<DynamicRoute> {
+  if (!options.apiKey) {
+    throw new GoogleRoutesRequestError("api_error", "Google Routes is not configured");
+  }
+
+  const candidate = await requestGoogleWalkingRoute({
+    apiKey: options.apiKey,
+    origin: options.origin,
+    destination: options.destination.position,
+    timeoutMs: options.timeoutMs,
+    fetchImpl: options.fetchImpl,
+  });
+
+  const steps =
+    candidate.steps.length > 0
+      ? candidate.steps
+      : [
+          {
+            instructionText: `Walk toward ${options.destination.name}.`,
+            maneuver: null,
+            distanceMeters: candidate.distanceMeters,
+            start: candidate.snappedStart,
+            end: candidate.snappedEnd,
+          },
+        ];
+
+  return {
+    destination: options.destination,
+    geometry: candidate.geometry,
+    steps,
+    distanceMeters: candidate.distanceMeters,
+    estimatedDurationSeconds: candidate.durationSeconds,
+    warnings: candidate.warnings,
+  };
+}
+
+function walkingSteps(
+  legs: { steps: { distanceMeters?: number; startLocation?: { latLng: GeoPoint }; endLocation?: { latLng: GeoPoint }; navigationInstruction?: { instructions?: string; maneuver?: string } }[] }[],
+): DynamicRouteStep[] {
+  const steps: DynamicRouteStep[] = [];
+  for (const leg of legs) {
+    for (const step of leg.steps) {
+      const start = step.startLocation?.latLng;
+      const end = step.endLocation?.latLng;
+      if (!start || !end) continue;
+      steps.push({
+        instructionText: step.navigationInstruction?.instructions?.trim() || "Continue.",
+        maneuver: step.navigationInstruction?.maneuver ?? null,
+        distanceMeters: step.distanceMeters ?? 0,
+        start,
+        end,
+      });
+    }
+  }
+  return steps;
 }
 
 export function acceptGoogleRoute(
@@ -344,6 +419,10 @@ function decodePolylineValue(
     delta: result & 1 ? ~(result >> 1) : result >> 1,
     nextIndex: index,
   };
+}
+
+function latLngOf(point: GeoPoint): { latitude: number; longitude: number } {
+  return { latitude: point.latitude, longitude: point.longitude };
 }
 
 function parseDurationSeconds(duration: string | undefined): number | null {

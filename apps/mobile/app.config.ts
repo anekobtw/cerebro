@@ -47,6 +47,24 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       googleMapsRequestTimeoutMs:
         process.env.EXPO_PUBLIC_GOOGLE_MAPS_REQUEST_TIMEOUT_MS ??
         process.env.GOOGLE_MAPS_REQUEST_TIMEOUT_MS,
+      googlePlacesEnabled:
+        process.env.EXPO_PUBLIC_GOOGLE_PLACES_ENABLED ??
+        process.env.GOOGLE_PLACES_ENABLED,
+      googlePlacesSearchRadiusM:
+        process.env.EXPO_PUBLIC_GOOGLE_PLACES_SEARCH_RADIUS_M ??
+        process.env.GOOGLE_PLACES_SEARCH_RADIUS_M,
+      googlePlacesRegionCode:
+        process.env.EXPO_PUBLIC_GOOGLE_PLACES_REGION ??
+        process.env.GOOGLE_PLACES_REGION,
+      navArrivalRadiusM:
+        process.env.EXPO_PUBLIC_NAV_ARRIVAL_RADIUS_M ??
+        process.env.NAV_ARRIVAL_RADIUS_M,
+      navMaxReroutesPerSession:
+        process.env.EXPO_PUBLIC_NAV_MAX_REROUTES_PER_SESSION ??
+        process.env.NAV_MAX_REROUTES_PER_SESSION,
+      navRerouteCooldownMs:
+        process.env.EXPO_PUBLIC_NAV_REROUTE_COOLDOWN_MS ??
+        process.env.NAV_REROUTE_COOLDOWN_MS,
     },
   },
 });
