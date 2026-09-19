@@ -153,12 +153,12 @@ blind-maps/
   package-lock.json
   .nvmrc
   .gitignore
+  .env.example
   apps/
     mobile/
       App.tsx
       app.json
       eas.json
-      .env.example
       src/
         app/
         accessibility/
@@ -170,7 +170,6 @@ blind-maps/
         diagnostics/
     api/
       package.json
-      .env.example
       src/
         index.ts
         config.ts
@@ -267,46 +266,16 @@ A creates only enough application structure for independent work:
 
 The mock mode must be visible in developer diagnostics and must not be presented as live perception. B can replace mock behavior without changing the mobile transport contract.
 
-### 4.5 Environment files
+### 4.5 Environment file
 
-Proposed mobile `.env.example`:
+Keep one root `.env.example`; each developer copies it to the repository-root `.env`. Group the public mobile configuration and server-side configuration with comments in that template. Expo resolves the root file for this monorepo, and server tools load that same root file explicitly.
 
-```dotenv
-EXPO_PUBLIC_API_BASE_URL=https://replace-with-api-host
-EXPO_PUBLIC_APP_MODE=development
-```
-
-Anything prefixed with `EXPO_PUBLIC_` is public application configuration. Never put Google or ElevenLabs keys there.
-
-Proposed API `.env.example`:
-
-```dotenv
-HOST=0.0.0.0
-PORT=3001
-PROVIDER_MODE=mock
-GOOGLE_API_KEY=
-GEMINI_MODEL=gemini-robotics-er-2-streaming-preview
-GEMINI_FALLBACK_MODEL=gemini-3.8-live
-GOOGLE_MAPS_API_KEY=
-GOOGLE_MAPS_ENABLED=false
-GOOGLE_MAPS_REQUEST_TIMEOUT_MS=4000
-GOOGLE_MAPS_MAX_REQUESTS_PER_SESSION=1
-ELEVENLABS_API_KEY=
-ELEVENLABS_VOICE_ID=
-ELEVENLABS_MODEL_ID=eleven_flash_v2_5
-ELEVENLABS_OUTPUT_FORMAT=pcm_24000
-DEMO_JOIN_CODE=
-SESSION_TOKEN_SECRET=
-MAX_ACTIVE_SESSIONS=2
-MAX_SESSION_SECONDS=900
-MAX_INPUT_FPS=1
-```
-
-These are proposed application settings, not a claim that every provider model or audio format is enabled for the account. Validate them during the first provider check. `mock`, `gemini_text_elevenlabs`, and `gemini_native` are our own provider-mode names.
+Anything prefixed with `EXPO_PUBLIC_` is public application configuration. Never put Google or ElevenLabs server keys there. The server reads unprefixed provider keys from the same local file. These are proposed application settings, not a claim that every provider model or audio format is enabled for the account. Validate them during the first provider check. `mock`, `gemini_text_elevenlabs`, and `gemini_native` are our own provider-mode names.
 
 Keep Google Maps disabled in the initial baseline. B enables it after the real-time session checkpoint and the route survey. The Maps key is server-only and separate from the Gemini key; restrict it to the Routes API and applicable server restrictions. No mobile Maps SDK key is needed unless the team later adds a visual Google Map.
 
 Generate secrets locally during implementation. The deployed server uses environment settings from its hosting platform. A short-lived session token is issued after a demo join-code check. Configure the demo session before handing the phone to the tester; do not add an account-registration flow to navigation.
+
 
 ### 4.6 A hands the baseline to B
 
@@ -319,8 +288,7 @@ git clone <repository-url> blind-maps
 cd blind-maps
 git switch <shared-baseline-branch>
 npm ci
-cp apps/api/.env.example apps/api/.env
-cp apps/mobile/.env.example apps/mobile/.env
+cp .env.example .env
 npm run typecheck
 npm run dev:api
 ```

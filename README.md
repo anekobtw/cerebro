@@ -17,10 +17,10 @@ Hackathon monorepo for the Blind Maps mobile assistant.
 
 ```sh
 npm ci
-cp apps/mobile/.env.example apps/mobile/.env
+cp .env.example .env
 ```
 
-Populate `apps/mobile/.env` with demo-scoped Gemini and ElevenLabs keys. Values beginning with `EXPO_PUBLIC_` are embedded in the mobile app; never use production or unrestricted keys.
+Configure the mobile `EXPO_PUBLIC_*` values and the separate server-side provider-check values in the root `.env`. Values beginning with `EXPO_PUBLIC_` are embedded in the mobile app; never reuse server credentials in those variables or commit `.env`.
 
 ## Android development build
 

@@ -2,7 +2,7 @@
 
 ## Experiment
 
-`apps/api/src/provider-check.ts` is a server-side, one-session viability check for the preferred `gemini-robotics-er-2-streaming-preview` plus ElevenLabs path. It keeps provider credentials in `apps/api/.env`; the script never reads mobile `EXPO_PUBLIC_*` values.
+`apps/api/src/provider-check.ts` is a server-side, one-session viability check for the preferred `gemini-robotics-er-2-streaming-preview` plus ElevenLabs path. It reads provider credentials from the repository-root `.env`; the script never reads mobile `EXPO_PUBLIC_*` values.
 
 The check:
 
@@ -16,7 +16,7 @@ The check:
 ## Running it
 
 ```sh
-cp apps/api/.env.example apps/api/.env
+cp .env.example .env
 # Set server-side provider credentials and paths to two different, real scene JPEGs
 # plus a real, raw 16 kHz mono PCM16 utterance.
 npm run provider:check --workspace @blind-maps/api
@@ -29,5 +29,5 @@ The JSON result contains model IDs, responses, output format, audio byte count, 
 ## Current result
 
 - `npm run typecheck --workspace @blind-maps/api` passes.
-- The live provider check has not sent any provider request. It stopped before connection because neither `GEMINI_API_KEY` nor `GOOGLE_API_KEY` is configured in `apps/api/.env`.
+- The live provider check has not sent any provider request. It stopped before connection because neither `GEMINI_API_KEY` nor `GOOGLE_API_KEY` is configured in the repository-root `.env`.
 - Account availability, Gemini handshake, scene-response relevance, ElevenLabs output, credit usage, and billing remain unverified. If those remain unresolved at the T+1:00 decision gate, configure `gemini_native` rather than extending this experiment.

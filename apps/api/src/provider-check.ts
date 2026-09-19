@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { config as loadEnv } from "dotenv";
 import { GoogleGenAI, Modality, type LiveServerMessage } from "@google/genai";
 
-loadEnv({ path: resolve(import.meta.dirname, "../.env") });
+loadEnv({ path: resolve(import.meta.dirname, "../../.env") });
 
 type ProviderCheckResult = {
   gemini: {
