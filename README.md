@@ -30,13 +30,13 @@ cd apps/mobile
 npx expo run:android
 ```
 
-The command builds the debug app, installs it, and starts Metro. After TypeScript-only changes, keep the installed development build and restart Metro from the repository root:
+The command builds the debug app, installs it, and starts Metro. For later starts, keep the installed development build, leave the phone connected over USB, return to the repository root, and run:
 
 ```sh
-npm run dev:mobile
+npm run dev
 ```
 
-The phone must reach the laptop running Metro. USB debugging with `adb reverse` is the simplest setup. Rebuild after changing native dependencies, Expo plugins, permissions, or the Expo SDK.
+This configures `adb reverse` for Metro on port 8081, starts Expo on an externally reachable listener while advertising the USB-forwarded loopback address, and opens the development client on the connected phone. Rebuild after changing native dependencies, Expo plugins, permissions, or the Expo SDK.
 
 ## Checks
 

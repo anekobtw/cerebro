@@ -9,7 +9,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:mobile": "npm run start --workspace @blind-maps/mobile",
+    "dev": "node tools/dev-mobile.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
