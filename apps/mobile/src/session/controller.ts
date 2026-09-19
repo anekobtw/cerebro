@@ -1,4 +1,5 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
+import { AudioManager } from "react-native-audio-api";
 import type { CameraView } from "expo-camera";
 import type { NavigationPhase, PlaceCandidate, ProviderMode } from "@blind-maps/contracts";
 import type { GuidanceLocation } from "@blind-maps/navigation";
@@ -194,6 +195,13 @@ export class NavigationSessionController {
       void providerConfig.elevenLabsVoiceId;
       void providerConfig.elevenLabsTtsModelId;
       speechSampleRateHz();
+      AudioManager.setAudioSessionOptions({
+        iosCategory: "playAndRecord",
+        iosMode: "voiceChat",
+        iosOptions: ["defaultToSpeaker", "allowBluetoothHFP"],
+      });
+      AudioManager.observeAudioInterruptions("gain");
+      await AudioManager.setAudioSessionActivity(true);
       await activateKeepAwakeAsync(KEEP_AWAKE_TAG);
       if (generation !== this.generation) return;
       // Started before the speech connection so a fix has time to settle while
@@ -571,6 +579,12 @@ export class NavigationSessionController {
     this.status = "Assistant ended";
     await this.microphone.stop();
     await this.player.close();
+    AudioManager.observeAudioInterruptions(false);
+    try {
+      await AudioManager.setAudioSessionActivity(false);
+    } catch {
+      // The native session may already be gone during activity teardown.
+    }
     try {
       await deactivateKeepAwake(KEEP_AWAKE_TAG);
     } catch {

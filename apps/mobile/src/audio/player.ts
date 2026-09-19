@@ -213,10 +213,13 @@ export class PcmPlayer {
     this.publish();
   }
 
-  private ensureContext(sampleRateHz: number): AudioContext {
+  private ensureContext(_sampleRateHz: number): AudioContext {
     if (this.context === null) {
-      this.context = new AudioContext({ sampleRate: sampleRateHz });
-      this.declaredSampleRateHz = sampleRateHz;
+      // The output stream must use the device-native rate. ElevenLabs PCM is
+      // resampled below; opening Android's exclusive stream at 24 kHz can
+      // succeed without producing speaker output on 48 kHz-only hardware.
+      this.context = new AudioContext();
+      this.declaredSampleRateHz = null;
       this.playbackEndsAtContextTime = this.context.currentTime;
     }
 
