@@ -1,6 +1,7 @@
 import { AudioManager, AudioRecorder } from "react-native-audio-api";
 
 import { monotonicNowMs } from "../session/clock";
+import { TARGET_AUDIO_CHUNK_MS } from "../session/media-limits";
 import { PcmChunker } from "./chunker";
 import {
   downmixToMono,
@@ -16,7 +17,7 @@ import { StreamingResampler } from "./resampler";
 import type { CapturedAudioChunk } from "./types";
 
 export const TARGET_SAMPLE_RATE_HZ = 16_000;
-export const TARGET_CHUNK_MS = 100;
+export const TARGET_CHUNK_MS = TARGET_AUDIO_CHUNK_MS;
 
 export interface MicrophoneStats {
   running: boolean;

@@ -100,5 +100,9 @@ describe("PcmPlayer generations", () => {
     expect(
       player.enqueue({ utteranceId: "limited", epoch: 0, sampleRateHz: 16_000, samples: samples(100) }),
     ).toBe("queue-full");
+    expect(nativeAudio.queuesStopped).toBe(1);
+    expect(
+      player.enqueue({ utteranceId: "limited", epoch: 0, sampleRateHz: 16_000, samples: samples(10) }),
+    ).toBe("stale-utterance");
   });
 });

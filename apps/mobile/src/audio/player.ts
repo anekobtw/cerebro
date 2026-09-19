@@ -1,10 +1,11 @@
 import { AudioBufferQueueSourceNode, AudioContext } from "react-native-audio-api";
 
+import { MAX_PLAYBACK_QUEUE_MS } from "../session/media-limits";
 import { pcm16ToFloat, type FloatSamples } from "./pcm";
 import { StreamingResampler } from "./resampler";
 import type { EnqueueResult, PlayableChunk } from "./types";
 
-export const MAX_QUEUED_MS = 2_000;
+export const MAX_QUEUED_MS = MAX_PLAYBACK_QUEUE_MS;
 
 export interface PlayerStats {
   contextSampleRateHz: number | null;
@@ -108,7 +109,12 @@ export class PcmPlayer {
     const incomingDurationMs = (chunk.samples.length / chunk.sampleRateHz) * 1000;
 
     if (this.queuedMs + incomingDurationMs > this.maxQueuedMs) {
-      return this.reject("queue-full");
+      const result = this.reject("queue-full");
+      this.stopQueue();
+      this.resampler = null;
+      this.activeUtteranceId = null;
+      this.publish();
+      return result;
     }
 
     try {

@@ -1,6 +1,12 @@
-export const MAX_INPUT_FPS = 1;
-export const MIN_CAPTURE_INTERVAL_MS = 1000 / MAX_INPUT_FPS;
-export const TARGET_ENCODED_BYTES = 150 * 1024;
+import {
+  CAMERA_CAPTURE_INTERVAL_MS,
+  CAMERA_INPUT_FPS,
+  TARGET_IMAGE_BYTES,
+} from "../session/media-limits";
+
+export const MAX_INPUT_FPS = CAMERA_INPUT_FPS;
+export const MIN_CAPTURE_INTERVAL_MS = CAMERA_CAPTURE_INTERVAL_MS;
+export const TARGET_ENCODED_BYTES = TARGET_IMAGE_BYTES;
 export const TARGET_LONG_EDGE_PX = 768;
 
 export type CaptureDecision = "start" | "too-soon" | "capture-in-flight";

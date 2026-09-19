@@ -31,7 +31,7 @@ So expect speaker audio to reach the microphone until measured otherwise. Check 
 
 If check 7 fails, the options in order of preference:
 
-1. Patch the recorder to request `oboe::InputPreset::VoiceCommunication` and rebuild. This touches a native dependency, so it costs another EAS build and both machines need it.
+1. Patch the recorder to request `oboe::InputPreset::VoiceCommunication` and rebuild locally. This touches a native dependency, so both machines need the same patch and native build.
 2. Use a wired or Bluetooth headset for the demo, and say so when presenting.
 3. Mute the microphone while the assistant speaks. This is a diagnostic workaround, not the agreed free-conversation behavior, and it must be labelled as such in the demo. Do not report interruption as working on the strength of it.
 
