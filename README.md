@@ -31,6 +31,7 @@ Create and install that build once per device. Run these commands after `npm ci`
 ```sh
 cd apps/mobile
 npx --yes eas-cli@24.7.0 login
+npx --yes eas-cli@24.7.0 init --account kharitonovs-team --non-interactive
 npx --yes eas-cli@24.7.0 build --profile development --platform android
 ```
 
@@ -49,12 +50,12 @@ Open the installed Blind Maps development app and scan the displayed QR code. Re
 ```sh
 cd apps/mobile
 npx --yes eas-cli@24.7.0 login
-npx --yes eas-cli@24.7.0 build:configure
+npx --yes eas-cli@24.7.0 init --account kharitonovs-team --non-interactive
 npx --yes eas-cli@24.7.0 update:configure
 npx --yes eas-cli@24.7.0 build --profile development --platform android
 ```
 
-Commit the `app.json` project metadata and update configuration produced by the two configure commands, then install that newly built APK on the phone. In the GitHub repository, add an `EXPO_TOKEN` Actions secret created with `npx --yes eas-cli@24.7.0 token:create`.
+`init` creates and records the EAS project ID in `app.json`; `update:configure` adds the update URL and runtime-version policy. Commit those `app.json` changes before installing the newly built APK on the phone. In the GitHub repository, add an `EXPO_TOKEN` Actions secret created with `npx --yes eas-cli@24.7.0 token:create`.
 
 The installed development build is pinned to the `production` update channel. On its next launch or reload after a successful workflow, it downloads a compatible JavaScript/assets update; reopen it once more if Expo downloads the update in the background. Native dependency, Expo config/plugin, permission, runtime-version, or SDK changes are not OTA-compatible and require another APK build and install.
 
