@@ -44,7 +44,7 @@ const providerExtra = (Constants.expoConfig?.extra?.provider ??
 
 export const providerConfig = {
   get geminiSceneModel() {
-    return (providerExtra.geminiSceneModel ?? "gemini-3.6-flash")
+    return (providerExtra.geminiSceneModel ?? "gemini-3.5-flash-lite")
       .trim()
       .replace(/^models\//, "");
   },

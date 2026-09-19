@@ -8,6 +8,7 @@ import { EchoGuard } from "../audio/echo-guard";
 import { MicrophoneStream, type MicrophoneStats } from "../audio/microphone";
 import { PcmPlayer, type PlayerStats } from "../audio/player";
 import { FrameCaptureLoop, type FrameCaptureStats } from "../camera/frame-capture";
+import { detectObjects, objectCue } from "../camera/on-device-detector";
 import type { CameraFrame } from "../camera/types";
 import { sceneChanged, sceneSignature } from "../camera/scene-difference";
 import { LocationTracker, type LocationStats } from "../location/tracking";
@@ -451,6 +452,16 @@ export class NavigationSessionController {
     try {
       const signature = sceneSignature(frame.jpegBase64);
       if (!sceneChanged(this.previousFrame, signature)) return;
+      const localCue = await this.detectLocalObstacle(frame);
+      if (localCue) {
+        await this.say(localCue);
+        if (generation !== this.generation || abort.signal.aborted || this.paused) return;
+        if (this.speechFailed) throw new Error("Speech playback failed. Retrying the scene.");
+        this.previousFrame = signature;
+        this.lastError = null;
+        this.status = "Watching for scene changes";
+        return;
+      }
       this.status = "Checking the scene";
       this.framesSent += 1;
       this.publish();
@@ -478,6 +489,16 @@ export class NavigationSessionController {
       clearTimeout(timeout);
       if (this.analysisAbort === abort) { this.analysisAbort = null; this.busy = false; }
       this.publish();
+    }
+  }
+
+  /** A native ML Kit result beats a cloud round trip, but failure always falls back to Gemini. */
+  private async detectLocalObstacle(frame: CameraFrame): Promise<string | null> {
+    try {
+      const objects = await detectObjects(frame);
+      return objects ? objectCue(objects) : null;
+    } catch {
+      return null;
     }
   }
 
