@@ -2,6 +2,13 @@
 
 Hackathon monorepo for the Cerebro mobile assistant. Development runs locally on a Pixel. The app connects directly to the configured cloud providers and has no Cerebro backend. The Android package was too large to include in the repository.
 
+## Tech stack
+
+- **Mobile:** Expo, React Native, React 19, and TypeScript.
+- **AI and voice:** Google Gemini for scene understanding, plus ElevenLabs realtime speech-to-text and text-to-speech.
+- **Navigation:** Google Maps Platform—Places API, Routes API, and device location through Expo Location.
+- **Device capabilities:** Expo Camera, native audio APIs, and Android development builds.
+
 ## Prerequisites
 
 - Node.js 24.21.0 and npm 11.19.0.
