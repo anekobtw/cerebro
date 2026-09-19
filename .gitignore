@@ -216,3 +216,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node.js and Expo
+node_modules/
+.expo/
+.expo-shared/
+*.tsbuildinfo
+
+# Local application configuration and generated media
+.env.*
+!.env.example
+recordings/
+*.pcm
+*.wav

@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Blind Maps",
+    "slug": "blind-maps",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "com.blindmaps.mobile"
+    },
+    "plugins": [
+      "expo-dev-client",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Blind Maps to use the camera for navigation assistance.",
+          "microphonePermission": "Allow Blind Maps to use the microphone for voice assistance.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Blind Maps to use your location while navigating."
+        }
+      ]
+    ]
+  }
+}

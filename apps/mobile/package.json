@@ -1,0 +1,29 @@
+{
+  "name": "@blind-maps/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo start --android --dev-client",
+    "ios": "expo start --ios --dev-client",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "~57.0.24",
+    "expo-camera": "~57.0.5",
+    "expo-dev-client": "~57.0.19",
+    "expo-haptics": "~57.0.3",
+    "expo-keep-awake": "~57.0.2",
+    "expo-location": "~57.0.19",
+    "expo-sensors": "~57.0.3",
+    "expo-speech": "~57.0.3",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2"
+  }
+}

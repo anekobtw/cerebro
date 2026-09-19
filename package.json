@@ -1,0 +1,22 @@
+{
+  "name": "blind-maps",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:mobile": "npm run start --workspace @blind-maps/mobile",
+    "dev:api": "npm run dev --workspace @blind-maps/api",
+    "start:api": "npm run start --workspace @blind-maps/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
+  }
+}
