@@ -70,64 +70,34 @@ export const providerConfig = {
     );
   },
   get elevenLabsRealtimeSttModelId() {
-    return process.env.EXPO_PUBLIC_ELEVENLABS_REALTIME_STT_MODEL_ID ??
-      providerExtra.elevenLabsRealtimeSttModelId ?? "scribe_v2_realtime";
+    return providerExtra.elevenLabsRealtimeSttModelId ?? "scribe_v2_realtime";
   },
   get googleRoutesEnabled() {
-    return booleanSetting(
-      process.env.EXPO_PUBLIC_GOOGLE_ROUTES_ENABLED ?? providerExtra.googleRoutesEnabled,
-      false,
-    );
+    return booleanSetting(providerExtra.googleRoutesEnabled, false);
   },
   get googlePlacesEnabled() {
-    return booleanSetting(
-      process.env.EXPO_PUBLIC_GOOGLE_PLACES_ENABLED ?? providerExtra.googlePlacesEnabled,
-      false,
-    );
+    return booleanSetting(providerExtra.googlePlacesEnabled, false);
   },
   get googlePlacesSearchRadiusM() {
-    return numberSetting(
-      process.env.EXPO_PUBLIC_GOOGLE_PLACES_SEARCH_RADIUS_M ??
-        providerExtra.googlePlacesSearchRadiusM,
-      3_000,
-    );
+    return numberSetting(providerExtra.googlePlacesSearchRadiusM, 3_000);
   },
   get googlePlacesRegionCode(): string | undefined {
-    const value = (
-      process.env.EXPO_PUBLIC_GOOGLE_PLACES_REGION ?? providerExtra.googlePlacesRegionCode
-    )?.trim();
+    const value = providerExtra.googlePlacesRegionCode?.trim();
     return value ? value.toLowerCase() : undefined;
   },
   get navArrivalRadiusM() {
-    return numberSetting(
-      process.env.EXPO_PUBLIC_NAV_ARRIVAL_RADIUS_M ?? providerExtra.navArrivalRadiusM,
-      30,
-    );
+    return numberSetting(providerExtra.navArrivalRadiusM, 30);
   },
   get navMaxReroutesPerSession() {
-    return numberSetting(
-      process.env.EXPO_PUBLIC_NAV_MAX_REROUTES_PER_SESSION ??
-        providerExtra.navMaxReroutesPerSession,
-      3,
-    );
+    return numberSetting(providerExtra.navMaxReroutesPerSession, 3);
   },
   get navRerouteCooldownMs() {
-    return numberSetting(
-      process.env.EXPO_PUBLIC_NAV_REROUTE_COOLDOWN_MS ?? providerExtra.navRerouteCooldownMs,
-      30_000,
-    );
+    return numberSetting(providerExtra.navRerouteCooldownMs, 30_000);
   },
   get googleMapsApiKey() {
-    return (
-      process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ??
-      providerExtra.googleMapsApiKey
-    );
+    return providerExtra.googleMapsApiKey;
   },
   get googleMapsRequestTimeoutMs() {
-    return numberSetting(
-      process.env.EXPO_PUBLIC_GOOGLE_MAPS_REQUEST_TIMEOUT_MS ??
-        providerExtra.googleMapsRequestTimeoutMs,
-      5_000,
-    );
+    return numberSetting(providerExtra.googleMapsRequestTimeoutMs, 5_000);
   },
 } as const;

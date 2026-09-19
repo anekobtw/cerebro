@@ -15,11 +15,11 @@ npm ci
 cp .env.example .env
 ```
 
-Set the provider values in the root `.env`. Existing `GEMINI_API_KEY`, `GEMINI_MODEL`, and `ELEVENLABS_*` values work. Their `EXPO_PUBLIC_*` aliases also work. The development app receives these values through Expo configuration, so use restricted development credentials, never commit `.env`, and rotate the credentials after the hackathon.
+Set the provider values in the root `.env`. The development app receives these values through Expo configuration, so use restricted development credentials, never commit `.env`, and rotate the credentials after the hackathon.
 
-Google Routes stays off unless `EXPO_PUBLIC_GOOGLE_ROUTES_ENABLED=true`. It also needs a restricted `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`. On the surveyed route the app makes at most one route request per navigation session and uses the surveyed fallback on an API error, timeout, or rejected path.
+Google Routes stays off unless `GOOGLE_ROUTES_ENABLED=true`. It also needs a restricted `GOOGLE_MAPS_API_KEY`. On the surveyed route the app makes at most one route request per navigation session and uses the surveyed fallback on an API error, timeout, or rejected path.
 
-Spoken destinations need `EXPO_PUBLIC_GOOGLE_PLACES_ENABLED=true` as well, with the Places API enabled on the same key. Say a destination, confirm the place the assistant reads back, and GPS guidance speaks each walking step. Guidance stops at `EXPO_PUBLIC_NAV_ARRIVAL_RADIUS_M` and hands the last stretch to the camera, because a GPS fix cannot find a door. Going off route costs one recalculation, capped by `EXPO_PUBLIC_NAV_MAX_REROUTES_PER_SESSION`.
+Spoken destinations need `GOOGLE_PLACES_ENABLED=true` as well, with the Places API enabled on the same key. Say a destination, confirm the place the assistant reads back, and GPS guidance speaks each walking step. Guidance stops at `NAV_ARRIVAL_RADIUS_M` and hands the last stretch to the camera, because a GPS fix cannot find a door. Going off route costs one recalculation, capped by `NAV_MAX_REROUTES_PER_SESSION`.
 
 ## Run on Android
 
