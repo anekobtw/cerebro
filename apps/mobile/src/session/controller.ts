@@ -17,7 +17,7 @@ import { describeScene, SceneRequestError } from "../providers/gemini-scene";
 import { providerConfig } from "../providers/config";
 import { speechSampleRateHz } from "../providers/elevenlabs-tts";
 import { monotonicNowMs } from "./clock";
-import type { ConnectionState } from "./client";
+export type ConnectionState = "idle" | "connecting" | "connected" | "failed";
 
 const KEEP_AWAKE_TAG = "blind-maps-navigation";
 const FIX_ACCURACY_TARGET_M = 25;
@@ -45,9 +45,9 @@ export interface NavigationSessionSnapshot {
   routeAvailable: boolean;
   navigationPhase: NavigationPhase | null;
   currentSegmentId: string | null;
-  routeSource: "google_routes" | "surveyed" | null;
+  routeSource: "google_routes" | null;
   routeRequestCount: number;
-  routeFallbackReason: string | null;
+  routeFallbackReason: null;
   routeFailureDetail: string | null;
   providerWarnings: string[];
   lastAssistantText: string | null;

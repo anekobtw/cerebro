@@ -4,5 +4,3 @@ export const TARGET_IMAGE_BYTES = 150 * 1_024;
 export const TARGET_AUDIO_CHUNK_MS = 40;
 // Live responses can arrive much faster than the speaker plays them.
 export const MAX_PLAYBACK_QUEUE_MS = 30_000;
-export const MAX_PROVIDER_BUFFERED_BYTES = 256 * 1_024;
-export const MAX_PROVIDER_CONGESTION_MS = 2_000;
