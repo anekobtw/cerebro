@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "main": "apps/mobile/index.ts",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -17,5 +18,10 @@
     "eas-cli": "^24.7.0",
     "typescript": "~6.0.3",
     "vitest": "^5.0.1"
+  },
+  "dependencies": {
+    "expo": "~57.0.24",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
   }
 }

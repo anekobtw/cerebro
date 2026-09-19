@@ -24,24 +24,20 @@ Populate `apps/mobile/.env` with demo-scoped Gemini and ElevenLabs keys. Values 
 
 ## Android development build
 
-The mobile app uses native modules that are not included in Expo Go. The QR code from `npm run dev:mobile` opens an already-installed Blind Maps development build; it does not install the app.
-
-Create and install that build once per device. Run these commands after `npm ci`; do not run `npx eas`, which resolves an unrelated `eas` package instead of Expo's CLI.
+The mobile app uses native modules that are not included in Expo Go. Build and install the development app locally on an Android device or emulator:
 
 ```sh
 cd apps/mobile
-npx --yes eas-cli@24.7.0 login
-npx --yes eas-cli@24.7.0 init --account kharitonovs-team --non-interactive
-npx --yes eas-cli@24.7.0 build --profile development --platform android
+npx expo run:android
 ```
 
-Install the APK from the EAS build link on the Android device. Then return to the repository root and start Metro:
+The local SDK lives at `~/Android/Sdk`; `~/.zprofile` exports `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `JAVA_HOME` (JDK 21), and the required Android tool paths. Open a new terminal before running the command so those settings are loaded.
+
+`npx expo run:android` requires either a USB-debuggable device connected through `adb` or a running Android emulator. It builds a debug APK with the generated `apps/mobile/android` project, installs it on the target, and starts Metro. Re-run it after changing a native dependency or Expo config/plugin; TypeScript-only changes only require restarting Metro:
 
 ```sh
 npm run dev:mobile
 ```
-
-Open the installed Blind Maps development app and scan the displayed QR code. Rebuild and reinstall the APK after changing a native dependency or Expo config/plugin; TypeScript-only changes only require restarting Metro.
 
 ## Continuous Expo updates
 
