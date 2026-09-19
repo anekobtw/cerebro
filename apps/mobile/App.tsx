@@ -118,16 +118,6 @@ export default function App(): JSX.Element {
           <Diagnostic label="Connection" value={snapshot?.connection ?? "idle"} />
           <Diagnostic label="Provider" value={snapshot?.provider ?? "none"} />
           {snapshot?.lastUserText && <Diagnostic label="Heard" value={snapshot.lastUserText} />}
-          <Diagnostic label="Navigation phase" value={snapshot?.navigationPhase ?? "unavailable"} />
-          <Diagnostic label="Route source" value={snapshot?.routeSource ?? "none"} />
-          <Diagnostic label="Route requests" value={String(snapshot?.routeRequestCount ?? 0)} />
-          <Diagnostic label="Segment" value={snapshot?.currentSegmentId ?? "none"} />
-          {snapshot?.routeFallbackReason && (
-            <Diagnostic label="Route fallback" value={snapshot.routeFallbackReason} />
-          )}
-          {snapshot?.routeFailureDetail && (
-            <Diagnostic label="Route failure" value={snapshot.routeFailureDetail} />
-          )}
           <Diagnostic
             label="Frame age"
             value={snapshot?.frameAgeMs == null ? "none" : `${snapshot.frameAgeMs} ms`}
@@ -151,12 +141,6 @@ export default function App(): JSX.Element {
           <Diagnostic label="Audio chunks queued" value={String(snapshot?.playback.chunksQueued ?? 0)} />
           {snapshot?.playback.lastError && <Text style={styles.error}>{snapshot.playback.lastError}</Text>}
           {snapshot?.lastError && <Text style={styles.error}>{snapshot.lastError}</Text>}
-          {snapshot?.routeSource === "google_routes" && (
-            <Text style={styles.attribution}>Powered by Google, ©2026 Google</Text>
-          )}
-          {snapshot?.providerWarnings.map((warning) => (
-            <Text key={warning} style={styles.warning}>{warning}</Text>
-          ))}
         </View>
 
         {!active && (
@@ -190,21 +174,15 @@ const styles = StyleSheet.create({
   title: { color: "#111111", fontSize: 34, fontWeight: "800" },
   status: { color: "#111111", fontSize: 22, fontWeight: "600", lineHeight: 30 },
   destination: { color: "#444444", fontSize: 17 },
-  routeUnavailable: { backgroundColor: "#fff4d6", color: "#4d3900", fontSize: 16, lineHeight: 23, padding: 12 },
   camera: { alignSelf: "center", borderRadius: 12, height: 220, overflow: "hidden", width: "100%" },
-  controls: { gap: 12 },
   primaryButton: { backgroundColor: "#111111", borderRadius: 10, padding: 19 },
   primaryButtonText: { color: "#ffffff", fontSize: 21, fontWeight: "700", textAlign: "center" },
   secondaryButton: { borderColor: "#111111", borderRadius: 10, borderWidth: 2, padding: 17 },
   secondaryButtonText: { color: "#111111", fontSize: 19, fontWeight: "700", textAlign: "center" },
-  endButton: { backgroundColor: "#8c1d18", borderRadius: 10, padding: 17 },
-  endButtonText: { color: "#ffffff", fontSize: 19, fontWeight: "700", textAlign: "center" },
   diagnostics: { backgroundColor: "#f2f2f2", borderRadius: 10, gap: 8, padding: 16 },
   diagnosticsTitle: { color: "#111111", fontSize: 18, fontWeight: "700" },
   diagnosticRow: { flexDirection: "row", justifyContent: "space-between", gap: 16 },
   diagnosticLabel: { color: "#444444", fontSize: 15 },
   diagnosticValue: { color: "#111111", flexShrink: 1, fontFamily: "monospace", fontSize: 14, textAlign: "right" },
   error: { color: "#a10f0f", fontSize: 15, marginTop: 4 },
-  warning: { color: "#6e4c00", fontSize: 14, marginTop: 4 },
-  attribution: { color: "#444444", fontSize: 13, marginTop: 4 },
 });

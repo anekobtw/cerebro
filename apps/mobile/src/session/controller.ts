@@ -1,6 +1,5 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import type { CameraView } from "expo-camera";
-import type { NavigationPhase, ProviderMode } from "@blind-maps/contracts";
 import { SpeechOutput } from "../audio/speech-output";
 import { EchoGuard } from "../audio/echo-guard";
 import { MicrophoneStream, type MicrophoneStats } from "../audio/microphone";
@@ -8,13 +7,12 @@ import { PcmPlayer, type PlayerStats } from "../audio/player";
 import { FrameCaptureLoop, type FrameCaptureStats } from "../camera/frame-capture";
 import type { CameraFrame } from "../camera/types";
 import { sceneChanged, sceneSignature } from "../camera/scene-difference";
-import { LocationTracker, type LocationStats } from "../location/tracking";
 import { ElevenLabsRealtimeClient } from "../providers/elevenlabs-realtime";
 import { describeScene, SceneRequestError } from "../providers/gemini-scene";
 import { providerConfig } from "../providers/config";
 import { speechSampleRateHz } from "../providers/elevenlabs-tts";
 import { monotonicNowMs } from "./clock";
-import type { ConnectionState } from "./client";
+export type ConnectionState = "idle" | "connecting" | "connected" | "failed";
 
 const KEEP_AWAKE_TAG = "blind-maps-navigation";
 export interface NavigationSessionSnapshot {
@@ -25,22 +23,11 @@ export interface NavigationSessionSnapshot {
   paused: boolean;
   status: string;
   connection: ConnectionState;
-  provider: ProviderMode | null;
+  provider: "gemini_text_elevenlabs" | null;
   frameAgeMs: number | null;
   microphone: MicrophoneStats;
   playback: PlayerStats;
   camera: FrameCaptureStats;
-  location: LocationStats;
-  routeId: string | null;
-  routeVersion: number | null;
-  routeAvailable: boolean;
-  navigationPhase: NavigationPhase | null;
-  currentSegmentId: string | null;
-  routeSource: "google_routes" | "surveyed" | null;
-  routeRequestCount: number;
-  routeFallbackReason: string | null;
-  routeFailureDetail: string | null;
-  providerWarnings: string[];
   lastAssistantText: string | null;
   lastUserText: string | null;
   lastError: string | null;
@@ -75,7 +62,6 @@ export class NavigationSessionController {
   private timer: ReturnType<typeof setInterval> | null = null;
   private connectReject: ((error: Error) => void) | null = null;
   private readonly echoGuard = new EchoGuard();
-  private readonly location = new LocationTracker();
   private readonly recognizer = new ElevenLabsRealtimeClient();
   private readonly player: PcmPlayer;
   private readonly speech: SpeechOutput;
@@ -132,10 +118,7 @@ export class NavigationSessionController {
       audioChunksSent: this.audioChunksSent, framesSent: this.framesSent,
       frameAgeMs: this.lastFrameAtMs === null ? null : Math.round(monotonicNowMs() - this.lastFrameAtMs),
       microphone: this.microphone.getStats(), playback: this.player.getStats(),
-      camera: this.camera.getStats(), location: this.location.getStats(),
-      routeId: null, routeVersion: null, routeAvailable: false, navigationPhase: null,
-      currentSegmentId: null, routeSource: null, routeRequestCount: 0,
-      routeFallbackReason: null, routeFailureDetail: null, providerWarnings: [],
+      camera: this.camera.getStats(),
       lastAssistantText: this.lastAssistantText, lastUserText: this.lastUserText, lastError: this.lastError,
     };
   }

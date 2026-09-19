@@ -35,23 +35,6 @@ export function speechSampleRateHz(): number {
   return Number(match[1]);
 }
 
-export async function synthesizeSpeech(text: string, signal?: AbortSignal): Promise<SynthesizedSpeech> {
-  const request = speechRequest(text);
-  const response = await fetch(request.url, { ...request.init, signal });
-  if (!response.ok) {
-    throw new Error(`ElevenLabs TTS failed (${response.status}): ${await response.text()}`);
-  }
-  const bytes = await response.arrayBuffer();
-  if (bytes.byteLength === 0 || bytes.byteLength % 2 !== 0) {
-    throw new Error("ElevenLabs TTS returned invalid PCM16 audio");
-  }
-  return {
-    bytes,
-    sampleRateHz: request.sampleRateHz,
-    contentType: response.headers.get("content-type") ?? "application/octet-stream",
-  };
-}
-
 /** Expo fetch exposes the native response stream without buffering the whole utterance. */
 export async function streamSpeech(
   text: string,
