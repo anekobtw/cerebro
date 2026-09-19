@@ -13,6 +13,10 @@ import {
 } from "./src/session/controller";
 
 export default function App(): JSX.Element {
+  return <AppContent />;
+}
+
+function AppContent(): JSX.Element {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView | null>(null);
