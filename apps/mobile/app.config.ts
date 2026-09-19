@@ -11,6 +11,8 @@ if (existsSync(repositoryEnvPath)) {
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
+  name: config.name ?? "Blind Maps",
+  slug: config.slug ?? "blind-maps",
   extra: {
     ...config.extra,
     provider: {
@@ -31,6 +33,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       elevenLabsSttModelId:
         process.env.EXPO_PUBLIC_ELEVENLABS_STT_MODEL_ID ??
         process.env.ELEVENLABS_STT_MODEL_ID,
+      googleRoutesEnabled:
+        process.env.EXPO_PUBLIC_GOOGLE_ROUTES_ENABLED ??
+        process.env.GOOGLE_ROUTES_ENABLED,
+      googleMapsApiKey:
+        process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ??
+        process.env.GOOGLE_MAPS_API_KEY,
+      googleMapsRequestTimeoutMs:
+        process.env.EXPO_PUBLIC_GOOGLE_MAPS_REQUEST_TIMEOUT_MS ??
+        process.env.GOOGLE_MAPS_REQUEST_TIMEOUT_MS,
     },
   },
 });

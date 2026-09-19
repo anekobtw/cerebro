@@ -73,6 +73,14 @@ describe("GeminiLiveClient", () => {
       setup: {
         model: "models/gemini-test-live",
         generationConfig: { responseModalities: ["AUDIO"] },
+        tools: [
+          {
+            functionDeclarations: expect.arrayContaining([
+              expect.objectContaining({ name: "report_user_intent" }),
+              expect.objectContaining({ name: "report_scene_observation" }),
+            ]),
+          },
+        ],
         outputAudioTranscription: {},
         contextWindowCompression: { slidingWindow: {} },
         sessionResumption: { handle: "resume-handle" },
@@ -95,6 +103,13 @@ describe("GeminiLiveClient", () => {
     client.sendJpegFrame("image-data");
     client.sendText("repeat that");
     client.endAudioStream();
+    client.sendToolResponses([
+      {
+        id: "tool-1",
+        name: "report_user_intent",
+        response: { accepted: true },
+      },
+    ]);
 
     expect(socket.sent.slice(1).map((message) => JSON.parse(message))).toEqual([
       {
@@ -109,6 +124,17 @@ describe("GeminiLiveClient", () => {
       },
       { realtimeInput: { text: "repeat that" } },
       { realtimeInput: { audioStreamEnd: true } },
+      {
+        toolResponse: {
+          functionResponses: [
+            {
+              id: "tool-1",
+              name: "report_user_intent",
+              response: { accepted: true },
+            },
+          ],
+        },
+      },
     ]);
   });
 

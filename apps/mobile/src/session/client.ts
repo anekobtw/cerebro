@@ -1,3 +1,11 @@
+import {
+  sceneObservationSchema,
+  userIntentSchema,
+  type NavigationProgress,
+  type SceneObservation,
+  type UserIntent,
+} from "@blind-maps/contracts";
+
 import type { CapturedAudioChunk } from "../audio/types";
 import type { CameraFrame } from "../camera/types";
 import type { LocationSample } from "../location/types";
@@ -22,11 +30,24 @@ export interface SessionClientOptions {
   onAudio(pcmBase64: string, sampleRateHz: number): void;
   onText(text: string): void;
   onInterrupted(): void;
+  onIntent(intent: UserIntent): void;
+  onObservation(event: {
+    observation: SceneObservation;
+    routeRevision: number;
+    sessionEpoch: number;
+  }): void;
   onSnapshot(snapshot: SessionClientSnapshot): void;
 }
 
+const sceneObservationArgumentsSchema = sceneObservationSchema.omit({
+  analysisId: true,
+  sourceFrameId: true,
+  sourceCapturedAtMonotonicMs: true,
+});
+
 const MAX_RECONNECT_ATTEMPTS = 4;
 const CONNECTION_TIMEOUT_MS = 15_000;
+const SCENE_ANALYSIS_TIMEOUT_MS = 5_000;
 
 /** Owns the phone's direct Gemini Live connection. There is no Blind Maps server. */
 export class SessionClient {
@@ -40,6 +61,16 @@ export class SessionClient {
   private sessionHandle: string | null = null;
   private congestionStartedAtMs: number | null = null;
   private lastError: string | null = null;
+  private latestFrame: CameraFrame | null = null;
+  private analysisSequence = 0;
+  private activeAnalysis: {
+    analysisId: string;
+    frame: CameraFrame;
+    routeRevision: number;
+    sessionEpoch: number;
+    allowedAnchorIds: string[];
+    startedAtMonotonicMs: number;
+  } | null = null;
 
   constructor(private readonly options: SessionClientOptions) {}
 
@@ -67,10 +98,21 @@ export class SessionClient {
     this.sessionHandle = null;
     this.congestionStartedAtMs = null;
     this.lastError = null;
+    this.latestFrame = null;
+    this.activeAnalysis = null;
     this.publish();
   }
 
   sendFrame(frame: CameraFrame): void {
+    this.latestFrame = frame;
+    if (
+      this.activeAnalysis &&
+      monotonicNowMs() - this.activeAnalysis.startedAtMonotonicMs <
+        SCENE_ANALYSIS_TIMEOUT_MS
+    ) {
+      return;
+    }
+    this.activeAnalysis = null;
     if (this.state !== "connected") return;
     const client = this.providerClient;
     if (!client || client.bufferedAmountBytes > MAX_PROVIDER_BUFFERED_BYTES) return;
@@ -106,11 +148,52 @@ export class SessionClient {
   }
 
   sendLocation(_location: LocationSample): void {
-    // Route progress remains local. Phase 3 will consume these samples on the phone.
+    // Route progress stays on the phone.
+  }
+
+  updateNavigation(progress: NavigationProgress): void {
+    const client = this.providerClient;
+    if (this.state !== "connected" || !client) return;
+    client.sendText(
+      [
+        "Application navigation state update. Do not speak only because of this update.",
+        `phase=${progress.phase}`,
+        `paused=${progress.paused}`,
+        `segment=${progress.segmentId ?? "none"}`,
+        `instruction=${progress.instructionId ?? "none"}`,
+        `routeRevision=${progress.routeRevision}`,
+      ].join(" "),
+    );
+  }
+
+  requestSceneCheck(routeRevision: number, allowedAnchorIds: string[]): boolean {
+    const client = this.providerClient;
+    const frame = this.latestFrame;
+    if (this.state !== "connected" || !client || !frame || this.activeAnalysis) {
+      return false;
+    }
+    this.analysisSequence += 1;
+    this.activeAnalysis = {
+      analysisId: `scene-${this.analysisSequence}`,
+      frame,
+      routeRevision,
+      sessionEpoch: this.epoch,
+      allowedAnchorIds: [...allowedAnchorIds],
+      startedAtMonotonicMs: monotonicNowMs(),
+    };
+    client.sendText(
+      [
+        "Check the most recent camera frame for the current route anchor.",
+        `Allowed anchor ids: ${allowedAnchorIds.join(", ")}.`,
+        "Call report_scene_observation once. Do not infer a clear walking path.",
+      ].join(" "),
+    );
+    return true;
   }
 
   command(command: "pause" | "resume" | "repeat" | "cancel"): number {
     this.epoch += 1;
+    this.activeAnalysis = null;
     const client = this.providerClient;
     if (this.state === "connected" && client) {
       const prompts = {
@@ -133,6 +216,7 @@ export class SessionClient {
 
   interrupt(): number {
     this.epoch += 1;
+    this.activeAnalysis = null;
     this.publish();
     return this.epoch;
   }
@@ -220,6 +304,10 @@ export class SessionClient {
       this.publish();
     }
 
+    if (message.toolCall?.functionCalls) {
+      this.handleToolCalls(message.toolCall.functionCalls);
+    }
+
     const transcript = message.serverContent?.outputTranscription?.text?.trim();
     if (transcript) this.options.onText(transcript);
 
@@ -228,6 +316,93 @@ export class SessionClient {
       if (part.inlineData?.data && part.inlineData.mimeType.startsWith("audio/pcm")) {
         this.options.onAudio(part.inlineData.data, parseSampleRate(part.inlineData.mimeType));
       }
+    }
+  }
+
+  private handleToolCalls(
+    calls: Array<{ id?: string; name?: string; args?: unknown }>,
+  ): void {
+    const client = this.providerClient;
+    if (!client) return;
+    const responses: Array<{
+      id?: string;
+      name: string;
+      response: Record<string, unknown>;
+    }> = [];
+
+    for (const call of calls) {
+      const name = call.name ?? "unknown";
+      if (name === "report_user_intent") {
+        const parsed = userIntentSchema.safeParse(call.args);
+        if (parsed.success) {
+          this.options.onIntent(parsed.data);
+          responses.push({
+            id: call.id,
+            name,
+            response: { reported: true },
+          });
+        } else {
+          responses.push({
+            id: call.id,
+            name,
+            response: { accepted: false, reason: "Invalid user intent" },
+          });
+        }
+        continue;
+      }
+
+      if (name === "report_scene_observation") {
+        const analysis = this.activeAnalysis;
+        const parsed = sceneObservationArgumentsSchema.safeParse(call.args);
+        const hasUnknownAnchor =
+          parsed.success &&
+          parsed.data.candidateAnchorIds.some(
+            (anchorId) => !analysis?.allowedAnchorIds.includes(anchorId),
+          );
+        if (!analysis || !parsed.success || hasUnknownAnchor) {
+          responses.push({
+            id: call.id,
+            name,
+            response: {
+              accepted: false,
+              reason: hasUnknownAnchor
+                ? "Unknown route anchor"
+                : "No matching scene check or invalid arguments",
+            },
+          });
+          continue;
+        }
+
+        this.activeAnalysis = null;
+        this.options.onObservation({
+          observation: {
+            ...parsed.data,
+            analysisId: analysis.analysisId,
+            sourceFrameId: analysis.frame.frameId,
+            sourceCapturedAtMonotonicMs: analysis.frame.capturedAtMonotonicMs,
+          },
+          routeRevision: analysis.routeRevision,
+          sessionEpoch: analysis.sessionEpoch,
+        });
+        responses.push({
+          id: call.id,
+          name,
+          response: { reported: true },
+        });
+        continue;
+      }
+
+      responses.push({
+        id: call.id,
+        name,
+        response: { accepted: false, reason: "Unknown tool" },
+      });
+    }
+
+    try {
+      client.sendToolResponses(responses);
+    } catch (error) {
+      this.handleSendFailure(client, error);
     }
   }
 
@@ -244,6 +419,7 @@ export class SessionClient {
     this.state = "reconnecting";
     this.reconnectAttempts += 1;
     this.epoch += 1;
+    this.activeAnalysis = null;
     this.publish();
     const delayMs = Math.min(1_000 * 2 ** (this.reconnectAttempts - 1), 8_000);
     this.reconnectTimer = setTimeout(() => {

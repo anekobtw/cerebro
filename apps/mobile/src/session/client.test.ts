@@ -60,6 +60,8 @@ describe("SessionClient", () => {
       onAudio: vi.fn(),
       onText: vi.fn(),
       onInterrupted: vi.fn(),
+      onIntent: vi.fn(),
+      onObservation: vi.fn(),
       onSnapshot: (snapshot) => snapshots.push(snapshot),
     });
 
@@ -92,6 +94,8 @@ describe("SessionClient", () => {
       onAudio: vi.fn(),
       onText: vi.fn(),
       onInterrupted: vi.fn(),
+      onIntent: vi.fn(),
+      onObservation: vi.fn(),
       onSnapshot: vi.fn(),
     });
 
@@ -112,6 +116,147 @@ describe("SessionClient", () => {
     });
 
     expect(socket.sent).toHaveLength(1);
+    client.stop();
+  });
+
+  it("normalizes tool calls and assigns frame metadata on the phone", async () => {
+    const onIntent = vi.fn();
+    const onObservation = vi.fn();
+    const client = new SessionClient({
+      onAudio: vi.fn(),
+      onText: vi.fn(),
+      onInterrupted: vi.fn(),
+      onIntent,
+      onObservation,
+      onSnapshot: vi.fn(),
+    });
+    const started = client.start();
+    const socket = FakeWebSocket.instances[0];
+    socket.open();
+    socket.message({ setupComplete: {} });
+    await started;
+
+    client.sendFrame({
+      frameId: "frame-7",
+      capturedAtMonotonicMs: 700,
+      mimeType: "image/jpeg",
+      width: 640,
+      height: 480,
+      jpegBase64: "image-data",
+    });
+    expect(client.requestSceneCheck(4, ["entrance"])).toBe(true);
+    expect(client.requestSceneCheck(4, ["entrance"])).toBe(false);
+    const sentDuringAnalysis = socket.sent.length;
+    client.sendFrame({
+      frameId: "frame-8",
+      capturedAtMonotonicMs: 800,
+      mimeType: "image/jpeg",
+      width: 640,
+      height: 480,
+      jpegBase64: "newer-image",
+    });
+    expect(socket.sent).toHaveLength(sentDuringAnalysis);
+    socket.message({
+      toolCall: {
+        functionCalls: [
+          {
+            id: "intent-1",
+            name: "report_user_intent",
+            args: { kind: "pause" },
+          },
+          {
+            id: "observation-1",
+            name: "report_scene_observation",
+            args: {
+              visibleText: ["LIBRARY"],
+              candidateAnchorIds: ["entrance"],
+              doorPositionInImage: "center",
+              viewUsable: true,
+              requiresAnotherView: false,
+              description: "A library entrance is centered.",
+            },
+          },
+        ],
+      },
+    });
+
+    expect(onIntent).toHaveBeenCalledWith({ kind: "pause" });
+    expect(onObservation).toHaveBeenCalledWith({
+      observation: {
+        analysisId: "scene-1",
+        sourceFrameId: "frame-7",
+        sourceCapturedAtMonotonicMs: 700,
+        visibleText: ["LIBRARY"],
+        candidateAnchorIds: ["entrance"],
+        doorPositionInImage: "center",
+        viewUsable: true,
+        requiresAnotherView: false,
+        description: "A library entrance is centered.",
+      },
+      routeRevision: 4,
+      sessionEpoch: 0,
+    });
+    expect(JSON.parse(socket.sent.at(-1) ?? "{}")).toMatchObject({
+      toolResponse: {
+        functionResponses: [
+          { id: "intent-1", response: { reported: true } },
+          { id: "observation-1", response: { reported: true } },
+        ],
+      },
+    });
+    client.stop();
+  });
+
+  it("rejects an unknown anchor from a scene tool call", async () => {
+    const onObservation = vi.fn();
+    const client = new SessionClient({
+      onAudio: vi.fn(),
+      onText: vi.fn(),
+      onInterrupted: vi.fn(),
+      onIntent: vi.fn(),
+      onObservation,
+      onSnapshot: vi.fn(),
+    });
+    const started = client.start();
+    const socket = FakeWebSocket.instances[0];
+    socket.open();
+    socket.message({ setupComplete: {} });
+    await started;
+    client.sendFrame({
+      frameId: "frame-1",
+      capturedAtMonotonicMs: 10,
+      mimeType: "image/jpeg",
+      width: 10,
+      height: 10,
+      jpegBase64: "image",
+    });
+    client.requestSceneCheck(1, ["vestibule"]);
+    socket.message({
+      toolCall: {
+        functionCalls: [
+          {
+            id: "bad-anchor",
+            name: "report_scene_observation",
+            args: {
+              visibleText: [],
+              candidateAnchorIds: ["other-door"],
+              doorPositionInImage: "unknown",
+              viewUsable: true,
+              requiresAnotherView: false,
+              description: "A door.",
+            },
+          },
+        ],
+      },
+    });
+    expect(onObservation).not.toHaveBeenCalled();
+    expect(JSON.parse(socket.sent.at(-1) ?? "{}")).toMatchObject({
+      toolResponse: {
+        functionResponses: [
+          { response: { accepted: false, reason: "Unknown route anchor" } },
+        ],
+      },
+    });
     client.stop();
   });
 });

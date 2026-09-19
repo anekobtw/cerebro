@@ -1,6 +1,6 @@
 # Blind Maps hackathon implementation plan
 
-Status: phase 2 mobile integration is in progress. On-phone acceptance checks remain.
+Status: phase 3 code is implemented. The field survey, route activation, and on-phone acceptance checks remain.
 
 This is the working plan for the existing application. Some snippets describe code already in the repository, while later route and navigation sections remain planned work. Implement one phase at a time and check its exit criteria before moving on.
 

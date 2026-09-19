@@ -72,6 +72,11 @@ export default function App(): JSX.Element {
         <Text style={styles.destination}>
           {snapshot?.routeId ? `Surveyed route: ${snapshot.routeId}` : "No surveyed route selected"}
         </Text>
+        {active && !snapshot?.routeAvailable && (
+          <Text accessibilityLiveRegion="polite" style={styles.routeUnavailable}>
+            Live route guidance is locked until the field survey is loaded. Scene questions still work.
+          </Text>
+        )}
 
         {active && cameraPermission?.granted && (
           <CameraView
@@ -96,6 +101,26 @@ export default function App(): JSX.Element {
           </Pressable>
         ) : (
           <View style={styles.controls}>
+            {snapshot?.routeAvailable && snapshot.navigationPhase === "ready" && (
+              <Pressable
+                accessibilityHint="Requests the surveyed route to the USF Tampa Library"
+                accessibilityRole="button"
+                onPress={() => controller.requestDestination()}
+                style={styles.primaryButton}
+              >
+                <Text style={styles.primaryButtonText}>Start library route</Text>
+              </Pressable>
+            )}
+            {snapshot?.navigationPhase === "destination_confirmation" && (
+              <Pressable
+                accessibilityHint="Confirms the displayed destination and checks the supported start area"
+                accessibilityRole="button"
+                onPress={() => void controller.confirmDestination()}
+                style={styles.primaryButton}
+              >
+                <Text style={styles.primaryButtonText}>Confirm library destination</Text>
+              </Pressable>
+            )}
             <Pressable
               accessibilityRole="button"
               onPress={() => void (paused ? controller.resume() : controller.pause())}
@@ -116,6 +141,16 @@ export default function App(): JSX.Element {
           <Text accessibilityRole="header" style={styles.diagnosticsTitle}>Session diagnostics</Text>
           <Diagnostic label="Connection" value={snapshot?.connection ?? "idle"} />
           <Diagnostic label="Provider" value={snapshot?.provider ?? "none"} />
+          <Diagnostic label="Navigation phase" value={snapshot?.navigationPhase ?? "unavailable"} />
+          <Diagnostic label="Route source" value={snapshot?.routeSource ?? "none"} />
+          <Diagnostic label="Route requests" value={String(snapshot?.routeRequestCount ?? 0)} />
+          <Diagnostic label="Segment" value={snapshot?.currentSegmentId ?? "none"} />
+          {snapshot?.routeFallbackReason && (
+            <Diagnostic label="Route fallback" value={snapshot.routeFallbackReason} />
+          )}
+          {snapshot?.routeFailureDetail && (
+            <Diagnostic label="Route failure" value={snapshot.routeFailureDetail} />
+          )}
           <Diagnostic
             label="Frame age"
             value={snapshot?.frameAgeMs == null ? "none" : `${snapshot.frameAgeMs} ms`}
@@ -129,6 +164,12 @@ export default function App(): JSX.Element {
             value={snapshot?.playback.activeUtteranceId ? `playing ${snapshot.playback.activeUtteranceId}` : "idle"}
           />
           {snapshot?.lastError && <Text style={styles.error}>{snapshot.lastError}</Text>}
+          {snapshot?.routeSource === "google_routes" && (
+            <Text style={styles.attribution}>Powered by Google, ©2026 Google</Text>
+          )}
+          {snapshot?.providerWarnings.map((warning) => (
+            <Text key={warning} style={styles.warning}>{warning}</Text>
+          ))}
         </View>
 
         {!active && (
@@ -162,6 +203,7 @@ const styles = StyleSheet.create({
   title: { color: "#111111", fontSize: 34, fontWeight: "800" },
   status: { color: "#111111", fontSize: 22, fontWeight: "600", lineHeight: 30 },
   destination: { color: "#444444", fontSize: 17 },
+  routeUnavailable: { backgroundColor: "#fff4d6", color: "#4d3900", fontSize: 16, lineHeight: 23, padding: 12 },
   camera: { alignSelf: "center", borderRadius: 12, height: 220, overflow: "hidden", width: "100%" },
   controls: { gap: 12 },
   primaryButton: { backgroundColor: "#111111", borderRadius: 10, padding: 19 },
@@ -176,4 +218,6 @@ const styles = StyleSheet.create({
   diagnosticLabel: { color: "#444444", fontSize: 15 },
   diagnosticValue: { color: "#111111", flexShrink: 1, fontFamily: "monospace", fontSize: 14, textAlign: "right" },
   error: { color: "#a10f0f", fontSize: 15, marginTop: 4 },
+  warning: { color: "#6e4c00", fontSize: 14, marginTop: 4 },
+  attribution: { color: "#444444", fontSize: 13, marginTop: 4 },
 });

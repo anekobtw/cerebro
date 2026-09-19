@@ -22,6 +22,13 @@ export interface GeminiLiveMessage {
     interrupted?: boolean;
     outputTranscription?: { text?: string };
   };
+  toolCall?: {
+    functionCalls?: Array<{
+      id?: string;
+      name?: string;
+      args?: unknown;
+    }>;
+  };
 }
 
 export interface GeminiLiveCallbacks {
@@ -37,12 +44,78 @@ export interface GeminiLiveConnectOptions {
   sessionHandle?: string | null;
 }
 
-const phaseTwoSystemInstruction = [
-  "You are the voice and scene-description assistant for a Blind Maps development check.",
-  "This build has no surveyed route loaded, so never give walking, turning, street-crossing, or arrival instructions.",
-  "Describe only visible evidence. Say when the camera view is unusable or uncertain.",
+const systemInstruction = [
+  "You are the voice and scene assistant for Blind Maps.",
+  "The phone owns route progress and arrival. Never invent a turn, route segment, clear path, or arrival.",
+  "Report navigation requests with report_user_intent. Wait for the phone's result before speaking as if the request succeeded.",
+  "Use report_scene_observation only when the phone asks for a route-anchor check.",
+  "Candidate anchors must come from the allowlist in that request.",
+  "Describe only visible evidence. If the view is poor, set viewUsable false and requiresAnotherView true.",
+  "A door's image position does not establish a safe turn direction.",
   "Keep spoken answers short.",
 ].join(" ");
+
+const navigationTools = [
+  {
+    functionDeclarations: [
+      {
+        name: "report_user_intent",
+        description:
+          "Report a navigation request after the user clearly asks for it or confirms it.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            kind: {
+              type: "STRING",
+              enum: [
+                "request_destination",
+                "confirm_destination",
+                "pause",
+                "resume",
+                "repeat",
+                "describe_scene",
+                "confirm_vestibule",
+                "cancel",
+              ],
+            },
+            destinationId: {
+              type: "STRING",
+              description: "Use usf-tampa-library for the supported library destination.",
+            },
+          },
+          required: ["kind"],
+        },
+      },
+      {
+        name: "report_scene_observation",
+        description:
+          "Return visible evidence for the active scene-check request. Use only allowed anchor ids.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            visibleText: { type: "ARRAY", items: { type: "STRING" } },
+            candidateAnchorIds: { type: "ARRAY", items: { type: "STRING" } },
+            doorPositionInImage: {
+              type: "STRING",
+              enum: ["left", "center", "right", "unknown"],
+            },
+            viewUsable: { type: "BOOLEAN" },
+            requiresAnotherView: { type: "BOOLEAN" },
+            description: { type: "STRING" },
+          },
+          required: [
+            "visibleText",
+            "candidateAnchorIds",
+            "doorPositionInImage",
+            "viewUsable",
+            "requiresAnotherView",
+            "description",
+          ],
+        },
+      },
+    ],
+  },
+];
 
 export class GeminiLiveClient {
   #socket: WebSocket | null = null;
@@ -70,8 +143,9 @@ export class GeminiLiveClient {
               responseModalities: ["AUDIO"],
             },
             systemInstruction: {
-              parts: [{ text: phaseTwoSystemInstruction }],
+              parts: [{ text: systemInstruction }],
             },
+            tools: navigationTools,
             outputAudioTranscription: {},
             contextWindowCompression: { slidingWindow: {} },
             sessionResumption: options.sessionHandle
@@ -130,6 +204,16 @@ export class GeminiLiveClient {
         },
       },
     });
+  }
+
+  sendToolResponses(
+    functionResponses: Array<{
+      id?: string;
+      name: string;
+      response: Record<string, unknown>;
+    }>,
+  ): void {
+    this.send({ toolResponse: { functionResponses } });
   }
 
   close(): void {

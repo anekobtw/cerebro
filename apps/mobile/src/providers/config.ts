@@ -16,6 +16,9 @@ interface ProviderExtra {
   elevenLabsTtsModelId?: string;
   elevenLabsTtsOutputFormat?: string;
   elevenLabsSttModelId?: string;
+  googleRoutesEnabled?: string;
+  googleMapsApiKey?: string;
+  googleMapsRequestTimeoutMs?: string;
 }
 
 const providerExtra = (Constants.expoConfig?.extra?.provider ?? {}) as ProviderExtra;
@@ -65,5 +68,26 @@ export const providerConfig = {
         providerExtra.elevenLabsSttModelId,
       "ELEVENLABS_STT_MODEL_ID or EXPO_PUBLIC_ELEVENLABS_STT_MODEL_ID",
     );
+  },
+  get googleRoutesEnabled() {
+    const value =
+      process.env.EXPO_PUBLIC_GOOGLE_ROUTES_ENABLED ??
+      providerExtra.googleRoutesEnabled ??
+      "false";
+    return value.toLowerCase() === "true";
+  },
+  get googleMapsApiKey() {
+    return (
+      process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ??
+      providerExtra.googleMapsApiKey
+    );
+  },
+  get googleMapsRequestTimeoutMs() {
+    const raw =
+      process.env.EXPO_PUBLIC_GOOGLE_MAPS_REQUEST_TIMEOUT_MS ??
+      providerExtra.googleMapsRequestTimeoutMs ??
+      "5000";
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? value : 5_000;
   },
 } as const;
