@@ -42,6 +42,22 @@ npm run dev:mobile
 
 Open the installed Blind Maps development app and scan the displayed QR code. Rebuild and reinstall the APK after changing a native dependency or Expo config/plugin; TypeScript-only changes only require restarting Metro.
 
+## Continuous Expo updates
+
+`.github/workflows/expo-ota.yml` publishes an EAS Update to the `production` branch after every push that changes `apps/**`. Before the workflow can publish or a device can receive updates, configure the Expo project once:
+
+```sh
+cd apps/mobile
+npx --yes eas-cli@24.7.0 login
+npx --yes eas-cli@24.7.0 build:configure
+npx --yes eas-cli@24.7.0 update:configure
+npx --yes eas-cli@24.7.0 build --profile development --platform android
+```
+
+Commit the `app.json` project metadata and update configuration produced by the two configure commands, then install that newly built APK on the phone. In the GitHub repository, add an `EXPO_TOKEN` Actions secret created with `npx --yes eas-cli@24.7.0 token:create`.
+
+The installed development build is pinned to the `production` update channel. On its next launch or reload after a successful workflow, it downloads a compatible JavaScript/assets update; reopen it once more if Expo downloads the update in the background. Native dependency, Expo config/plugin, permission, runtime-version, or SDK changes are not OTA-compatible and require another APK build and install.
+
 ## Commands
 
 ```sh
