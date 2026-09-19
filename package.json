@@ -9,8 +9,6 @@
   ],
   "scripts": {
     "dev:mobile": "npm run start --workspace @blind-maps/mobile",
-    "dev:api": "npm run dev --workspace @blind-maps/api",
-    "start:api": "npm run start --workspace @blind-maps/api",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run"
   },
