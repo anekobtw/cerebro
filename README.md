@@ -4,8 +4,14 @@ Hackathon monorepo for the Blind Maps mobile assistant.
 
 ## Prerequisites
 
-- Node.js 24.21.0
-- npm 11.19.0
+- Node.js 24.21.0 and npm 11.19.0. With [nvm](https://github.com/nvm-sh/nvm):
+
+  ```sh
+  nvm install
+  nvm use
+  ```
+
+- An Expo account for installing development builds on a physical device.
 
 ## Setup
 
@@ -13,6 +19,28 @@ Hackathon monorepo for the Blind Maps mobile assistant.
 npm ci
 cp apps/mobile/.env.example apps/mobile/.env
 ```
+
+Populate `apps/mobile/.env` with demo-scoped Gemini and ElevenLabs keys. Values beginning with `EXPO_PUBLIC_` are embedded in the mobile app; never use production or unrestricted keys.
+
+## Android development build
+
+The mobile app uses native modules that are not included in Expo Go. The QR code from `npm run dev:mobile` opens an already-installed Blind Maps development build; it does not install the app.
+
+Create and install that build once per device:
+
+```sh
+cd apps/mobile
+npx eas login
+npx eas build --profile development --platform android
+```
+
+Install the APK from the EAS build link on the Android device. Then return to the repository root and start Metro:
+
+```sh
+npm run dev:mobile
+```
+
+Open the installed Blind Maps development app and scan the displayed QR code. Rebuild and reinstall the APK after changing a native dependency or Expo config/plugin; TypeScript-only changes only require restarting Metro.
 
 ## Commands
 
@@ -22,4 +50,3 @@ npm run typecheck
 npm test
 ```
 
-The mobile app calls Gemini Live and ElevenLabs directly. `EXPO_PUBLIC_*` values are public configuration embedded in the application bundle, including the intentionally direct provider keys; use only demo-scoped keys with strict spend limits.
