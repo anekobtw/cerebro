@@ -1,0 +1,15 @@
+{
+  "name": "@blind-maps/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "provider:check": "tsx src/provider-check.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^1.40.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "dotenv": "^16.6.1"
+  }
+}

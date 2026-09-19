@@ -1,20 +1,33 @@
 # Provider check
 
-## Local direct-client configuration
+## Experiment
 
-The Pixel connects directly to Gemini Live and ElevenLabs. There is no deployed backend, proxy, or application WebSocket gateway.
+`apps/api/src/provider-check.ts` is a server-side, one-session viability check for the preferred `gemini-robotics-er-2-streaming-preview` plus ElevenLabs path. It keeps provider credentials in `apps/api/.env`; the script never reads mobile `EXPO_PUBLIC_*` values.
 
-Copy `apps/mobile/.env.example` to `apps/mobile/.env`, then create and paste the provider credentials:
+The check:
 
-- Gemini: create an API key at <https://aistudio.google.com/apikey>. Set a strict project budget and API-key restrictions before using it on the phone.
-- ElevenLabs: create an API key in the ElevenLabs dashboard and set a credit limit. The documented interactive CLI login is `elevenlabs auth login`; it stores credentials locally for the CLI and does not insert keys into an Expo app. There is no documented dashboard-login API for an application to obtain an API key.
+1. Opens a Gemini Live WebSocket session configured for text output.
+2. Sends a real 16 kHz, mono, PCM16 utterance and a JPEG scene with library route context.
+3. Collects the first completed text response.
+4. Sends a different JPEG scene in the same session and fails when the response is empty or unchanged.
+5. Sends a short ElevenLabs TTS request in the configured PCM output format, rejects empty output, and records its content type and byte count.
+6. Reads the ElevenLabs subscription counters when the account permits it. Gemini streaming pricing is not inferred from another Gemini model; inspect its billing data separately before making a cost claim.
 
-`EXPO_PUBLIC_*` values are embedded in the mobile application bundle. The direct-client choice exposes Gemini and ElevenLabs keys to anyone with the APK. Restrict these keys to the demo project, least permissions, and a hard spending cap. Never reuse personal or production keys.
+## Running it
 
-## Direct API contracts
+```sh
+cp apps/api/.env.example apps/api/.env
+# Set server-side provider credentials and paths to two different, real scene JPEGs
+# plus a real, raw 16 kHz mono PCM16 utterance.
+npm run provider:check --workspace @blind-maps/api
+```
 
-- Gemini Live: the app opens `BidiGenerateContent` directly with the configured API key, then sends a setup message. Audio is 16-bit little-endian PCM at 16 kHz and camera frames are JPEG base64 payloads.
-- ElevenLabs TTS: `POST /v1/text-to-speech/{voice_id}/stream` with `xi-api-key`, configured model, and configured output format.
-- ElevenLabs STT: `POST /v1/speech-to-text` with `xi-api-key`, `scribe_v2`, and a 16-bit mono 16 kHz PCM upload.
+`PROVIDER_CHECK_MAX_COST_USD` records the operator-approved spend ceiling in the result. It is not a provider-side billing control: configure an actual budget/usage limit in both provider dashboards before running the check.
 
-Provider access, account model availability, actual output formats, latency, and billing remain unverified until tested on the Pixel.
+The JSON result contains model IDs, responses, output format, audio byte count, and available ElevenLabs usage counters. It contains no keys or media bytes.
+
+## Current result
+
+- `npm run typecheck --workspace @blind-maps/api` passes.
+- The live provider check has not sent any provider request. It stopped before connection because neither `GEMINI_API_KEY` nor `GOOGLE_API_KEY` is configured in `apps/api/.env`.
+- Account availability, Gemini handshake, scene-response relevance, ElevenLabs output, credit usage, and billing remain unverified. If those remain unresolved at the T+1:00 decision gate, configure `gemini_native` rather than extending this experiment.

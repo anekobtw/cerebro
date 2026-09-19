@@ -16,6 +16,7 @@
   "devDependencies": {
     "@types/node": "^26.6.2",
     "eas-cli": "^24.7.0",
+    "tsx": "^4.23.13",
     "typescript": "~6.0.3",
     "vitest": "^5.0.1"
   },
