@@ -232,3 +232,6 @@ node_modules/
 recordings/
 *.pcm
 *.wav
+
+# Generated Android release artifacts
+releases/*.apk

@@ -2,6 +2,12 @@
 
 Hackathon monorepo for the Cerebro mobile assistant. Development runs locally on a Pixel. The app connects directly to the configured cloud providers and has no Cerebro backend.
 
+## Download
+
+[Download the latest Android APK](https://github.com/anekobtw/cerebro/releases/latest/download/Cerebro.apk)
+
+iPhone users need to set up the app themselves; follow the [setup instructions](#setup). We are currently publishing Cerebro to the App Store and Google Play.
+
 ## Prerequisites
 
 - Node.js 24.21.0 and npm 11.19.0.
