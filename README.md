@@ -26,12 +26,12 @@ Populate `apps/mobile/.env` with demo-scoped Gemini and ElevenLabs keys. Values 
 
 The mobile app uses native modules that are not included in Expo Go. The QR code from `npm run dev:mobile` opens an already-installed Blind Maps development build; it does not install the app.
 
-Create and install that build once per device:
+Create and install that build once per device. Run these commands after `npm ci`; do not run `npx eas`, which resolves an unrelated `eas` package instead of Expo's CLI.
 
 ```sh
 cd apps/mobile
-npx eas login
-npx eas build --profile development --platform android
+npx --yes eas-cli@24.7.0 login
+npx --yes eas-cli@24.7.0 build --profile development --platform android
 ```
 
 Install the APK from the EAS build link on the Android device. Then return to the repository root and start Metro:
