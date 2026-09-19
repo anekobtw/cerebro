@@ -9,6 +9,7 @@ function required(value: string | undefined, variableName: string): string {
 }
 
 interface ProviderExtra {
+  geminiSceneModel?: string;
   geminiApiKey?: string;
   geminiLiveModel?: string;
   elevenLabsApiKey?: string;
@@ -16,6 +17,7 @@ interface ProviderExtra {
   elevenLabsTtsModelId?: string;
   elevenLabsTtsOutputFormat?: string;
   elevenLabsSttModelId?: string;
+  elevenLabsRealtimeSttModelId?: string;
   googleRoutesEnabled?: string;
   googleMapsApiKey?: string;
   googleMapsRequestTimeoutMs?: string;
@@ -24,6 +26,10 @@ interface ProviderExtra {
 const providerExtra = (Constants.expoConfig?.extra?.provider ?? {}) as ProviderExtra;
 
 export const providerConfig = {
+  get geminiSceneModel() {
+    return (process.env.EXPO_PUBLIC_GEMINI_SCENE_MODEL ?? providerExtra.geminiSceneModel ?? "gemini-3.6-flash")
+      .trim().replace(/^models\//, "");
+  },
   get geminiApiKey() {
     return required(
       process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? providerExtra.geminiApiKey,
@@ -68,6 +74,10 @@ export const providerConfig = {
         providerExtra.elevenLabsSttModelId,
       "ELEVENLABS_STT_MODEL_ID or EXPO_PUBLIC_ELEVENLABS_STT_MODEL_ID",
     );
+  },
+  get elevenLabsRealtimeSttModelId() {
+    return process.env.EXPO_PUBLIC_ELEVENLABS_REALTIME_STT_MODEL_ID ??
+      providerExtra.elevenLabsRealtimeSttModelId ?? "scribe_v2_realtime";
   },
   get googleRoutesEnabled() {
     const value =

@@ -1,5 +1,6 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { StatusBar } from "expo-status-bar";
+import { AudioManager } from "react-native-audio-api";
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -42,6 +43,15 @@ export default function App(): JSX.Element {
     const permission = cameraPermission?.granted
       ? cameraPermission
       : await requestCameraPermission();
+    if (!permission.granted) {
+      await controller.start(false);
+      return;
+    }
+    // Android permission dialogs can background the activity. Finish them before
+    // activating the session, whose background handler pauses capture.
+    if (await AudioManager.checkRecordingPermissions() !== "Granted") {
+      await AudioManager.requestRecordingPermissions();
+    }
     await controller.start(permission.granted);
   }, [cameraPermission, controller, requestCameraPermission]);
 
@@ -66,15 +76,15 @@ export default function App(): JSX.Element {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text accessibilityRole="header" style={styles.title}>Blind Maps</Text>
-        <Text accessibilityLiveRegion="assertive" style={styles.status}>
+        <Text accessibilityLiveRegion="none" style={styles.status}>
           {snapshot?.status ?? "Not connected"}
         </Text>
         <Text style={styles.destination}>
-          {snapshot?.routeId ? `Surveyed route: ${snapshot.routeId}` : "No surveyed route selected"}
+          {snapshot?.destination ? `Destination: ${snapshot.destination}` : "Tell the assistant where you want to go"}
         </Text>
-        {active && !snapshot?.routeAvailable && (
-          <Text accessibilityLiveRegion="polite" style={styles.routeUnavailable}>
-            Live route guidance is locked until the field survey is loaded. Scene questions still work.
+        {active && (
+          <Text style={styles.destination}>
+            Say "pause" to pause or resume, "repeat" to choose a destination again, or "end assistant".
           </Text>
         )}
 
@@ -92,7 +102,7 @@ export default function App(): JSX.Element {
 
         {!active ? (
           <Pressable
-            accessibilityHint="Requests camera, microphone, and location access, then connects to the scene assistant"
+            accessibilityHint="Requests camera and microphone access, then asks for your destination"
             accessibilityRole="button"
             onPress={() => void start()}
             style={styles.primaryButton}
@@ -100,47 +110,14 @@ export default function App(): JSX.Element {
             <Text style={styles.primaryButtonText}>Start assistant</Text>
           </Pressable>
         ) : (
-          <View style={styles.controls}>
-            {snapshot?.routeAvailable && snapshot.navigationPhase === "ready" && (
-              <Pressable
-                accessibilityHint="Requests the surveyed route to the USF Tampa Library"
-                accessibilityRole="button"
-                onPress={() => controller.requestDestination()}
-                style={styles.primaryButton}
-              >
-                <Text style={styles.primaryButtonText}>Start library route</Text>
-              </Pressable>
-            )}
-            {snapshot?.navigationPhase === "destination_confirmation" && (
-              <Pressable
-                accessibilityHint="Confirms the displayed destination and checks the supported start area"
-                accessibilityRole="button"
-                onPress={() => void controller.confirmDestination()}
-                style={styles.primaryButton}
-              >
-                <Text style={styles.primaryButtonText}>Confirm library destination</Text>
-              </Pressable>
-            )}
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => void (paused ? controller.resume() : controller.pause())}
-              style={styles.primaryButton}
-            >
-              <Text style={styles.primaryButtonText}>{paused ? "Resume" : "Pause"}</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => controller.repeat()} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Repeat</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => void controller.end()} style={styles.endButton}>
-              <Text style={styles.endButtonText}>End assistant</Text>
-            </Pressable>
-          </View>
+          null
         )}
 
         <View accessibilityLabel="Session diagnostics" style={styles.diagnostics}>
           <Text accessibilityRole="header" style={styles.diagnosticsTitle}>Session diagnostics</Text>
           <Diagnostic label="Connection" value={snapshot?.connection ?? "idle"} />
           <Diagnostic label="Provider" value={snapshot?.provider ?? "none"} />
+          {snapshot?.lastUserText && <Diagnostic label="Heard" value={snapshot.lastUserText} />}
           <Diagnostic label="Navigation phase" value={snapshot?.navigationPhase ?? "unavailable"} />
           <Diagnostic label="Route source" value={snapshot?.routeSource ?? "none"} />
           <Diagnostic label="Route requests" value={String(snapshot?.routeRequestCount ?? 0)} />
@@ -159,10 +136,20 @@ export default function App(): JSX.Element {
             label="Microphone"
             value={snapshot?.microphone.running ? "streaming" : snapshot?.microphone.starting ? "starting" : "stopped"}
           />
+          <Diagnostic label="Microphone chunks" value={String(snapshot?.microphone.chunksEmitted ?? 0)} />
+          <Diagnostic label="Microphone level" value={(snapshot?.microphone.lastPeakLevel ?? 0).toFixed(3)} />
+          {snapshot?.microphone.lastError && <Text style={styles.error}>{snapshot.microphone.lastError}</Text>}
+          <Diagnostic label="Camera" value={snapshot?.camera.running ? "capturing" : "stopped"} />
+          <Diagnostic label="Frames captured" value={String(snapshot?.camera.framesCaptured ?? 0)} />
+          <Diagnostic label="Frames sent" value={String(snapshot?.framesSent ?? 0)} />
+          <Diagnostic label="Audio chunks sent" value={String(snapshot?.audioChunksSent ?? 0)} />
+          {snapshot?.camera.lastError && <Text style={styles.error}>{snapshot.camera.lastError}</Text>}
           <Diagnostic
             label="Audio"
-            value={snapshot?.playback.activeUtteranceId ? `playing ${snapshot.playback.activeUtteranceId}` : "idle"}
+            value={snapshot?.playback.queuedMs ? `playing ${snapshot.playback.queuedMs} ms` : "idle"}
           />
+          <Diagnostic label="Audio chunks queued" value={String(snapshot?.playback.chunksQueued ?? 0)} />
+          {snapshot?.playback.lastError && <Text style={styles.error}>{snapshot.playback.lastError}</Text>}
           {snapshot?.lastError && <Text style={styles.error}>{snapshot.lastError}</Text>}
           {snapshot?.routeSource === "google_routes" && (
             <Text style={styles.attribution}>Powered by Google, ©2026 Google</Text>

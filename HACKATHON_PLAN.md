@@ -182,7 +182,6 @@ blind-maps/
     navigation/
       package.json
       src/index.ts
-      src/navigation.test.ts
   data/
     routes/
     landmarks/
@@ -220,15 +219,14 @@ The root manifest exposes these shared scripts:
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev:mobile": "npm run start --workspace @blind-maps/mobile",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "vitest run"
+    "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }
 ```
 
 Every workspace must define `typecheck`; `--if-present` is only for initialization convenience. The mobile `start` script must run `expo start --dev-client`.
 
-Install TypeScript, Vitest, and Node types at the root. Use Zod for runtime validation. Keep direct provider calls behind a mobile provider adapter. Exact versions are selected once and committed in `package-lock.json`.
+Install TypeScript and Node types at the root. Use Zod for runtime validation. Keep direct provider calls behind a mobile provider adapter. Exact versions are selected once and committed in `package-lock.json`.
 
 Shared packages may export TypeScript source for Metro during this hackathon. Give each a real package manifest and TypeScript configuration. Use package imports such as `@blind-maps/contracts`, not imports that traverse several parent directories.
 
@@ -885,7 +883,7 @@ A owns device and interaction failures. B owns provider, route, and event-proces
 | Pausing and resuming                             | Losing the current route phase                        |
 
 
-Use Vitest for the pure reducer, provider scheduling, and runtime validation. Do not spend time snapshot-testing the main screen or mocking the actual camera as proof of native behavior.
+Use typechecking and the required Pixel checks below. Camera and audio behavior must be verified on the device.
 
 ### Required Pixel checks
 

@@ -16,6 +16,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   extra: {
     ...config.extra,
     provider: {
+      geminiSceneModel:
+        process.env.EXPO_PUBLIC_GEMINI_SCENE_MODEL ?? process.env.GEMINI_SCENE_MODEL,
       geminiApiKey:
         process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? process.env.GEMINI_API_KEY,
       geminiLiveModel:
@@ -33,6 +35,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       elevenLabsSttModelId:
         process.env.EXPO_PUBLIC_ELEVENLABS_STT_MODEL_ID ??
         process.env.ELEVENLABS_STT_MODEL_ID,
+      elevenLabsRealtimeSttModelId:
+        process.env.EXPO_PUBLIC_ELEVENLABS_REALTIME_STT_MODEL_ID ??
+        process.env.ELEVENLABS_REALTIME_STT_MODEL_ID,
       googleRoutesEnabled:
         process.env.EXPO_PUBLIC_GOOGLE_ROUTES_ENABLED ??
         process.env.GOOGLE_ROUTES_ENABLED,

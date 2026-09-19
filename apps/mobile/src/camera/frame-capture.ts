@@ -34,6 +34,7 @@ export interface FrameCaptureStats {
 }
 
 export interface FrameCaptureOptions {
+  canCapture?: () => boolean;
   getCamera: () => CameraView | null;
   onFrame?: (frame: CameraFrame) => void;
   onStats?: (stats: FrameCaptureStats) => void;
@@ -123,6 +124,7 @@ export class FrameCaptureLoop {
   }
 
   private async tick(currentRunId: number): Promise<void> {
+    if (this.options.canCapture?.() === false) return;
     const decision = this.gate.decide(monotonicNowMs());
 
     if (decision !== "start") {

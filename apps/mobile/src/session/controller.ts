@@ -1,37 +1,26 @@
-import { AccessibilityInfo } from "react-native";
-import * as Speech from "expo-speech";
-import * as Haptics from "expo-haptics";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import type { CameraView } from "expo-camera";
-import type {
-  NavigationPhase,
-  ProviderMode,
-  RouteManifest,
-  UserIntent,
-} from "@blind-maps/contracts";
-import {
-  createNavigationState,
-  markArrivalAnnounced,
-  navigationProgress,
-  reduceNavigation,
-  type NavigationEvent,
-  type NavigationState,
-} from "@blind-maps/navigation";
-
-import { decodeBase64 } from "../audio/base64";
+import type { NavigationPhase, ProviderMode } from "@blind-maps/contracts";
+import { SpeechOutput } from "../audio/speech-output";
+import { EchoGuard } from "../audio/echo-guard";
 import { MicrophoneStream, type MicrophoneStats } from "../audio/microphone";
 import { PcmPlayer, type PlayerStats } from "../audio/player";
 import { FrameCaptureLoop, type FrameCaptureStats } from "../camera/frame-capture";
+import type { CameraFrame } from "../camera/types";
+import { sceneChanged, sceneSignature } from "../camera/scene-difference";
 import { LocationTracker, type LocationStats } from "../location/tracking";
-import { activeRouteLoadResult } from "../navigation/active-route";
-import { selectOutdoorRoute } from "../navigation/google-routes";
+import { ElevenLabsRealtimeClient } from "../providers/elevenlabs-realtime";
+import { describeScene, SceneRequestError } from "../providers/gemini-scene";
 import { providerConfig } from "../providers/config";
+import { speechSampleRateHz } from "../providers/elevenlabs-tts";
 import { monotonicNowMs } from "./clock";
-import { SessionClient, type ConnectionState, type SessionClientSnapshot } from "./client";
+import type { ConnectionState } from "./client";
 
 const KEEP_AWAKE_TAG = "blind-maps-navigation";
-
 export interface NavigationSessionSnapshot {
+  destination: string | null;
+  audioChunksSent: number;
+  framesSent: number;
   active: boolean;
   paused: boolean;
   status: string;
@@ -53,6 +42,7 @@ export interface NavigationSessionSnapshot {
   routeFailureDetail: string | null;
   providerWarnings: string[];
   lastAssistantText: string | null;
+  lastUserText: string | null;
   lastError: string | null;
 }
 
@@ -62,520 +52,306 @@ export interface NavigationSessionControllerOptions {
 }
 
 export class NavigationSessionController {
-  private readonly player: PcmPlayer;
-  private readonly microphone: MicrophoneStream;
-  private readonly camera: FrameCaptureLoop;
-  private readonly location: LocationTracker;
-  private readonly client: SessionClient;
   private active = false;
   private paused = false;
+  private destination: string | null = null;
+  private listeningForDestination = false;
+  private destinationRevision = 0;
   private status = "Not connected";
   private connection: ConnectionState = "idle";
-  private provider: ProviderMode | null = null;
-  private lastFrameAtMs: number | null = null;
-  private lastAssistantText: string | null = null;
   private lastError: string | null = null;
-  private lastLocationError: string | null = null;
-  private frameAgeTimer: ReturnType<typeof setInterval> | null = null;
-  private readonly routeManifest: RouteManifest | null =
-    activeRouteLoadResult.available ? activeRouteLoadResult.manifest : null;
-  private navigationState: NavigationState | null = this.routeManifest
-    ? createNavigationState(this.routeManifest)
-    : null;
-  private routeRequestStarted = false;
-  private routeRequestCount = 0;
-  private routeFallbackReason: string | null = null;
-  private routeFailureDetail: string | null = null;
-  private providerWarnings: string[] = [];
+  private lastAssistantText: string | null = null;
+  private lastUserText: string | null = null;
+  private lastFrameAtMs: number | null = null;
+  private framesSent = 0;
+  private audioChunksSent = 0;
+  private generation = 0;
+  private speechGeneration = 0;
+  private speaking = false;
+  private speechFailed = false;
+  private busy = false;
+  private previousFrame: Float32Array | null = null;
+  private analysisAbort: AbortController | null = null;
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private connectReject: ((error: Error) => void) | null = null;
+  private readonly echoGuard = new EchoGuard();
+  private readonly location = new LocationTracker();
+  private readonly recognizer = new ElevenLabsRealtimeClient();
+  private readonly player: PcmPlayer;
+  private readonly speech: SpeechOutput;
+  private readonly microphone: MicrophoneStream;
+  private readonly camera: FrameCaptureLoop;
 
   constructor(private readonly options: NavigationSessionControllerOptions) {
     this.player = new PcmPlayer({ onStats: () => this.publish() });
-    this.camera = new FrameCaptureLoop({
-      getCamera: options.getCamera,
-      onFrame: (frame) => {
-        this.lastFrameAtMs = frame.capturedAtMonotonicMs;
-        this.client.sendFrame(frame);
-        this.maybeRequestSceneCheck();
-        this.publish();
-      },
-      onStats: () => this.publish(),
-    });
-    this.location = new LocationTracker({
-      onSample: (sample) => {
-        this.client.sendLocation(sample);
-        this.dispatchNavigation({ type: "LOCATION", sample });
-      },
-      onOrientation: (sample) => {
-        this.dispatchNavigation({
-          type: "ORIENTATION",
-          trueHeadingDeg: sample.trueHeadingDeg,
-          accuracyLevel: sample.accuracyLevel,
+    this.speech = new SpeechOutput({
+      onActivity: (speaking) => this.echoGuard.setLocalSpeech(speaking, monotonicNowMs()),
+      onAudio: (audio, generation) => {
+        const bytes = new Uint8Array(audio.bytes);
+        const samples = new Int16Array(bytes.length / 2);
+        const view = new DataView(bytes.buffer);
+        for (let i = 0; i < samples.length; i += 1) samples[i] = view.getInt16(i * 2, true);
+        const result = this.player.playSamples({
+          utteranceId: `speech-${generation}`, epoch: this.player.epoch,
+          samples, sampleRateHz: audio.sampleRateHz,
         });
+        if (result !== "queued") throw new Error(`Speech playback failed: ${result}`);
       },
-      onStats: (stats) => {
-        if (stats.lastError && stats.lastError !== this.lastLocationError) {
-          this.lastLocationError = stats.lastError;
-          this.lastError = stats.lastError;
-          this.status = "Location unavailable";
-          void this.announceLocally("Location permission is needed for navigation.");
-        }
-        this.publish();
-      },
+      onError: (message) => { this.speechFailed = true; this.lastError = message; this.player.stop(); this.publish(); },
     });
     this.microphone = new MicrophoneStream({
       onChunk: (chunk) => {
-        this.client.sendAudio(chunk);
+        if (!this.active || this.connection !== "connected") return;
+        if (this.recognizer.bufferedAmountBytes > 128_000) {
+          void this.fail("Speech recognition upload stalled. Start the assistant again.");
+          return;
+        }
+        try {
+          // Once commands are exact matches, keep listening during playback too.
+          const filtered = this.destination ? chunk : this.echoGuard.filter(chunk, this.player.queuedMs, monotonicNowMs());
+          this.recognizer.sendAudio(filtered.pcmBase64);
+          this.audioChunksSent += 1;
+        } catch (error) { void this.fail(String(error)); }
       },
       onStats: () => this.publish(),
-      onError: (message) => {
-        this.lastError = message;
-        this.status = "Microphone unavailable";
-        void this.announceLocally("Microphone permission is needed for voice assistance.");
-        this.publish();
-      },
+      onError: (message) => { void this.fail(message); },
     });
-    this.client = new SessionClient({
-      onAudio: (pcmBase64, sampleRateHz) => {
-        const samples = pcmBytesToInt16(decodeBase64(pcmBase64));
-        const utteranceId = `gemini-${this.client.currentEpoch}`;
-        this.player.beginUtterance(utteranceId, this.client.currentEpoch);
-        this.player.enqueue({
-          utteranceId,
-          epoch: this.client.currentEpoch,
-          sampleRateHz,
-          samples,
-        });
-      },
-      onText: (text) => {
-        this.lastAssistantText = text;
-        this.status = text;
-        this.publish();
-      },
-      onInterrupted: () => {
-        this.player.interrupt();
-        this.syncNavigationEpoch();
-      },
-      onIntent: (intent) => void this.handleIntent(intent),
-      onObservation: (event) => {
-        this.dispatchNavigation({
-          type: "OBSERVATION",
-          ...event,
-          receivedAtMonotonicMs: monotonicNowMs(),
-        });
-      },
-      onSnapshot: (snapshot) => this.handleClientSnapshot(snapshot),
+    this.camera = new FrameCaptureLoop({
+      getCamera: options.getCamera,
+      canCapture: () => this.active && !this.paused && !!this.destination && !this.busy && !this.speaking,
+      onFrame: (frame) => { void this.processFrame(frame); },
+      onStats: () => this.publish(),
     });
   }
 
   getSnapshot(): NavigationSessionSnapshot {
     return {
-      active: this.active,
-      paused: this.paused,
-      status: this.status,
-      connection: this.connection,
-      provider: this.provider,
+      active: this.active, paused: this.paused, destination: this.destination,
+      status: this.status, connection: this.connection,
+      provider: this.active ? "gemini_text_elevenlabs" : null,
+      audioChunksSent: this.audioChunksSent, framesSent: this.framesSent,
       frameAgeMs: this.lastFrameAtMs === null ? null : Math.round(monotonicNowMs() - this.lastFrameAtMs),
-      microphone: this.microphone.getStats(),
-      playback: this.player.getStats(),
-      camera: this.camera.getStats(),
-      location: this.location.getStats(),
-      routeId: this.routeManifest?.id ?? null,
-      routeVersion: this.routeManifest?.version ?? null,
-      routeAvailable: this.routeManifest !== null,
-      navigationPhase: this.navigationState?.phase ?? null,
-      currentSegmentId:
-        this.navigationState && this.routeManifest
-          ? navigationProgress(this.navigationState, this.routeManifest).segmentId
-          : null,
-      routeSource: this.navigationState?.outdoorRoute?.source ?? null,
-      routeRequestCount: this.routeRequestCount,
-      routeFallbackReason: this.routeFallbackReason,
-      routeFailureDetail: this.routeFailureDetail,
-      providerWarnings: [...this.providerWarnings],
-      lastAssistantText: this.lastAssistantText,
-      lastError: this.lastError,
+      microphone: this.microphone.getStats(), playback: this.player.getStats(),
+      camera: this.camera.getStats(), location: this.location.getStats(),
+      routeId: null, routeVersion: null, routeAvailable: false, navigationPhase: null,
+      currentSegmentId: null, routeSource: null, routeRequestCount: 0,
+      routeFallbackReason: null, routeFailureDetail: null, providerWarnings: [],
+      lastAssistantText: this.lastAssistantText, lastUserText: this.lastUserText, lastError: this.lastError,
     };
   }
 
   async start(cameraPermissionGranted: boolean): Promise<void> {
     if (this.active) return;
-    try {
-      void providerConfig.geminiApiKey;
-      void providerConfig.geminiLiveModel;
-    } catch (error) {
-      this.lastError = error instanceof Error ? error.message : String(error);
-      this.status = this.lastError;
-      await this.announceLocally("Gemini is not configured on this development build.");
-      this.publish();
-      return;
-    }
-    if (!cameraPermissionGranted) {
-      this.lastError = "Camera permission denied";
-      this.status = "Camera permission is needed for navigation assistance.";
-      await this.announceLocally(this.status);
-      this.publish();
-      return;
-    }
     this.active = true;
+    const generation = ++this.generation;
     this.paused = false;
-    this.status = "Connecting";
+    this.destination = null;
+    this.previousFrame = null;
     this.lastError = null;
-    await activateKeepAwakeAsync(KEEP_AWAKE_TAG);
-    this.frameAgeTimer = setInterval(() => this.publish(), 500);
+    this.lastUserText = null;
+    this.lastAssistantText = null;
+    this.framesSent = 0;
+    this.audioChunksSent = 0;
+    this.connection = "connecting";
+    this.status = "Connecting";
     this.publish();
     try {
-      await this.client.start();
+      if (!cameraPermissionGranted) throw new Error("Camera permission is needed.");
+      void providerConfig.geminiApiKey;
+      void providerConfig.elevenLabsApiKey;
+      void providerConfig.elevenLabsVoiceId;
+      void providerConfig.elevenLabsTtsModelId;
+      speechSampleRateHz();
+      await activateKeepAwakeAsync(KEEP_AWAKE_TAG);
+      if (generation !== this.generation) return;
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("Speech recognition connection timed out")), 15_000);
+        this.connectReject = (error) => { clearTimeout(timeout); reject(error); };
+        this.recognizer.connect({
+          onReady: () => { clearTimeout(timeout); this.connectReject = null; resolve(); },
+          onTranscript: (text) => { if (generation === this.generation) void this.handleTranscript(text); },
+          onError: (message) => {
+            clearTimeout(timeout);
+            reject(new Error(message));
+            if (generation === this.generation) void this.fail(message);
+          },
+          onClose: () => {
+            clearTimeout(timeout);
+            reject(new Error("Speech recognition disconnected"));
+            if (generation === this.generation) void this.fail("Speech recognition disconnected. Start the assistant again.");
+          },
+        });
+      });
+      if (generation !== this.generation) return;
+      this.connection = "connected";
+      await this.microphone.start();
+      if (generation !== this.generation) return;
+      if (!this.microphone.getStats().running) throw new Error("Microphone unavailable");
+      this.timer = setInterval(() => this.publish(), 250);
+      await this.repeat();
     } catch (error) {
-      if (!this.active) return;
-      const message = error instanceof Error ? error.message : String(error);
-      await this.end();
-      this.lastError = message;
-      this.status = "Connection failed. Check the phone's provider configuration.";
-      await this.announceLocally(this.status);
-      this.publish();
-      return;
+      if (generation === this.generation) await this.fail(error instanceof Error ? error.message : String(error));
     }
-    if (!this.active) return;
-    this.camera.start();
-    await Promise.all([this.microphone.start(), this.location.start()]);
   }
 
-  async pause(announce = true, sendCommand = true): Promise<void> {
+  private async handleTranscript(text: string): Promise<void> {
+    if (!this.active) return;
+    const command = text.toLowerCase().replace(/[.,!?]/g, "").replace(/\s+/g, " ").trim();
+    if (command === "end assistant") { await this.end(); return; }
+    if (command === "pause") { await (this.paused ? this.resume() : this.pause()); return; }
+    if (command === "repeat") { await this.repeat(); return; }
+    if (this.destination || this.paused) return;
+    if (!this.listeningForDestination || !text.trim()) return;
+    this.listeningForDestination = false;
+    this.destination = text.trim();
+    this.lastUserText = text.trim();
+    const generation = this.generation;
+    const revision = this.destinationRevision;
+    await this.say("The route is built.");
+    if (generation !== this.generation || revision !== this.destinationRevision || this.paused) return;
+    this.status = "Watching for scene changes";
+    this.camera.start();
+    this.publish();
+  }
+
+  private async processFrame(frame: CameraFrame): Promise<void> {
+    if (!this.active || this.paused || !this.destination || this.busy || this.speaking) return;
+    this.lastFrameAtMs = frame.capturedAtMonotonicMs;
+    const generation = this.generation;
+    this.busy = true;
+    const abort = new AbortController();
+    this.analysisAbort = abort;
+    const timeout = setTimeout(() => abort.abort(), 15_000);
+    try {
+      const signature = sceneSignature(frame.jpegBase64);
+      if (!sceneChanged(this.previousFrame, signature)) return;
+      this.status = "Checking the scene";
+      this.framesSent += 1;
+      this.publish();
+      const answer = await describeScene(frame, abort.signal);
+      clearTimeout(timeout);
+      if (generation !== this.generation || abort.signal.aborted || this.paused) return;
+      await this.say(answer);
+      if (generation !== this.generation || abort.signal.aborted || this.paused) return;
+      if (this.speechFailed) throw new Error("Speech playback failed. Retrying the scene.");
+      this.previousFrame = signature;
+      this.lastError = null;
+      this.status = "Watching for scene changes";
+    } catch (error) {
+      if (generation === this.generation && !this.paused && this.analysisAbort === abort) {
+        this.lastError = abort.signal.aborted ? "Scene request timed out" : String(error);
+        if (error instanceof SceneRequestError && !error.retryable) {
+          this.camera.stop();
+          this.status = this.lastError;
+          return;
+        }
+        this.status = "Could not check the scene. Retrying.";
+        await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
+      }
+    } finally {
+      clearTimeout(timeout);
+      if (this.analysisAbort === abort) { this.analysisAbort = null; this.busy = false; }
+      this.publish();
+    }
+  }
+
+  async pause(): Promise<void> {
     if (!this.active || this.paused) return;
     this.paused = true;
-    this.status = "Paused";
     this.camera.stop();
-    await Promise.all([this.microphone.stop(), Promise.resolve(this.location.stop())]);
-    if (sendCommand) {
-      this.player.interrupt();
-      const epoch = this.client.command("pause");
-      this.dispatchNavigation({ type: "PAUSE", sessionEpoch: epoch }, false);
-    } else {
-      this.player.stop();
-      const epoch = this.client.interrupt();
-      this.dispatchNavigation({ type: "PAUSE", sessionEpoch: epoch }, false);
-    }
-    await deactivateKeepAwake(KEEP_AWAKE_TAG);
-    if (announce) await this.announceLocally("Navigation paused.");
+    this.cancelWork();
+    await this.say("Paused.", false);
     this.publish();
   }
 
-  async resume(sendCommand = true): Promise<void> {
+  async resume(): Promise<void> {
     if (!this.active || !this.paused) return;
-    if (this.connection !== "connected") {
-      this.status = "Waiting for the provider connection before resuming.";
-      this.publish();
-      return;
-    }
     this.paused = false;
-    this.status = "Resuming";
-    const epoch = sendCommand
-      ? this.client.command("resume")
-      : this.client.interrupt();
-    this.dispatchNavigation({ type: "RESUME", sessionEpoch: epoch }, false);
-    await activateKeepAwakeAsync(KEEP_AWAKE_TAG);
-    this.camera.start();
-    await Promise.all([this.microphone.start(), this.location.start()]);
+    await this.say("Resumed.", false);
+    if (!this.active || this.paused) return;
+    this.previousFrame = null;
+    if (this.destination) this.camera.start();
+    else await this.repeat();
     this.publish();
   }
 
-  repeat(sendCommand = true): void {
+  async repeat(): Promise<void> {
     if (!this.active) return;
-    if (sendCommand) {
-      this.player.interrupt();
-      this.client.command("repeat");
-      this.syncNavigationEpoch();
-    } else {
-      this.player.stop();
-    }
-    this.status = "Repeating last guidance";
+    const generation = this.generation;
+    const revision = ++this.destinationRevision;
+    this.camera.stop();
+    this.cancelWork();
+    this.destination = null;
+    this.previousFrame = null;
+    this.lastFrameAtMs = null;
+    this.lastUserText = null;
+    this.lastError = null;
+    this.paused = false;
+    this.listeningForDestination = false;
+    await this.say("Where do you want to go?");
+    if (generation !== this.generation || revision !== this.destinationRevision || this.paused) return;
+    this.listeningForDestination = true;
+    this.status = "Listening for your destination";
     this.publish();
+  }
+
+  private async say(text: string, remember = true): Promise<void> {
+    this.speech.cancel();
+    this.player.interrupt();
+    const generation = ++this.speechGeneration;
+    this.speaking = true;
+    this.speechFailed = false;
+    if (remember) this.lastAssistantText = text;
+    this.status = text;
+    this.publish();
+    await this.speech.speak(text);
+    // Synthesis finishes before the last queued PCM samples have played.
+    while (generation === this.speechGeneration && this.active && this.player.queuedMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    }
+    if (generation === this.speechGeneration) this.speaking = false;
+  }
+
+  private cancelWork(): void {
+    this.analysisAbort?.abort();
+    this.analysisAbort = null;
+    this.busy = false;
+    this.speechGeneration += 1;
+    this.speech.cancel();
+    this.player.interrupt();
+    this.speaking = false;
   }
 
   async end(): Promise<void> {
-    if (!this.active) return;
     this.active = false;
+    this.generation += 1;
     this.paused = false;
-    this.status = "Navigation ended";
-    if (this.frameAgeTimer) clearInterval(this.frameAgeTimer);
-    this.frameAgeTimer = null;
+    this.listeningForDestination = false;
+    this.cancelWork();
+    this.connectReject?.(new Error("Session ended"));
+    this.connectReject = null;
+    this.recognizer.close();
     this.camera.stop();
-    this.location.stop();
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    this.connection = "idle";
+    this.status = "Assistant ended";
     await this.microphone.stop();
-    this.client.stop();
-    Speech.stop();
     await this.player.close();
     await deactivateKeepAwake(KEEP_AWAKE_TAG);
-    if (this.routeManifest) {
-      this.navigationState = createNavigationState(this.routeManifest);
-    }
-    this.routeRequestStarted = false;
-    this.routeRequestCount = 0;
-    this.routeFallbackReason = null;
-    this.routeFailureDetail = null;
-    this.providerWarnings = [];
     this.publish();
   }
 
-  requestDestination(): void {
-    if (!this.routeManifest || !this.navigationState) {
-      this.status = "No surveyed route is loaded. Scene assistance is still available.";
-      void this.announceLocally(this.status);
-      this.publish();
-      return;
-    }
-    this.dispatchNavigation({
-      type: "REQUEST_DESTINATION",
-      destinationId: this.routeManifest.id,
-    });
-  }
+  async dispose(): Promise<void> { await this.end(); }
 
-  async confirmDestination(): Promise<void> {
-    if (!this.routeManifest || !this.navigationState) return;
-    const previousPhase = this.navigationState.phase;
-    this.dispatchNavigation({
-      type: "CONFIRM_DESTINATION",
-      confirmedAtMonotonicMs: monotonicNowMs(),
-    });
-    if (
-      previousPhase === "destination_confirmation" &&
-      this.navigationState.phase === "alignment"
-    ) {
-      await this.prepareOutdoorRoute();
-    }
-  }
-
-  async dispose(): Promise<void> {
+  private async fail(message: string): Promise<void> {
+    if (!this.active) return;
     await this.end();
-    if (!this.active) {
-      this.client.stop();
-      this.camera.stop();
-      this.location.stop();
-      await this.microphone.stop();
-      await this.player.close();
-    }
-  }
-
-  private handleClientSnapshot(snapshot: SessionClientSnapshot): void {
-    const previous = this.connection;
-    this.connection = snapshot.connection;
-    this.provider = snapshot.provider;
-    this.lastError = snapshot.lastError;
-    if (snapshot.connection === "connected") {
-      if (previous === "reconnecting") {
-        this.paused = true;
-      }
-      this.status = this.paused
-        ? "Paused"
-        : this.routeManifest
-          ? "Connected. Say, take me to the library, to start the surveyed route."
-          : "Connected. Scene assistance is ready. No surveyed route is loaded.";
-      Speech.stop();
-    } else if (snapshot.connection === "reconnecting") {
-      this.paused = true;
-      this.player.stop();
-      this.status = "Connection lost. Guidance paused while reconnecting.";
-      if (previous !== "reconnecting") {
-        this.camera.stop();
-        this.location.stop();
-        void this.microphone.stop();
-        void this.announceLocally(this.status);
-      }
-      this.dispatchNavigation(
-        { type: "PAUSE", sessionEpoch: snapshot.epoch },
-        false,
-      );
-    } else if (snapshot.connection === "failed") {
-      this.player.stop();
-      this.status = "Connection failed. End navigation and try again.";
-      if (previous !== "failed") {
-        this.camera.stop();
-        this.location.stop();
-        void this.microphone.stop();
-        void this.announceLocally(this.status);
-      }
-    }
-    this.publish();
-  }
-
-  private async handleIntent(intent: UserIntent): Promise<void> {
-    switch (intent.kind) {
-      case "request_destination":
-        if (!this.routeManifest || !this.navigationState) {
-          this.status = "No surveyed route is loaded. I cannot start live guidance.";
-          await this.announceLocally(this.status);
-          this.publish();
-          return;
-        }
-        this.dispatchNavigation({
-          type: "REQUEST_DESTINATION",
-          destinationId: intent.destinationId,
-        });
-        return;
-      case "confirm_destination":
-        await this.confirmDestination();
-        return;
-      case "pause":
-        await this.pause();
-        return;
-      case "resume":
-        await this.resume();
-        return;
-      case "repeat":
-        this.repeat();
-        return;
-      case "confirm_vestibule":
-        this.dispatchNavigation({
-          type: "CONFIRM_INSIDE",
-          confirmedAtMonotonicMs: monotonicNowMs(),
-        });
-        return;
-      case "cancel":
-        await this.end();
-        return;
-      case "describe_scene":
-        return;
-    }
-  }
-
-  private async prepareOutdoorRoute(): Promise<void> {
-    if (
-      this.routeRequestStarted ||
-      !this.routeManifest ||
-      !this.navigationState?.lastLocation
-    ) {
-      return;
-    }
-    this.routeRequestStarted = true;
-    const start = this.navigationState.lastLocation;
-    const selected = await selectOutdoorRoute({
-      enabled: providerConfig.googleRoutesEnabled,
-      apiKey: providerConfig.googleMapsApiKey,
-      manifest: this.routeManifest,
-      start: { latitude: start.latitude, longitude: start.longitude },
-      timeoutMs: providerConfig.googleMapsRequestTimeoutMs,
-    });
-    if (!this.active || !this.navigationState) return;
-    this.routeRequestCount = selected.requestCount;
-    this.routeFallbackReason = selected.route.fallbackReason ?? null;
-    this.routeFailureDetail = selected.rejectionReason;
-    this.providerWarnings = selected.route.providerWarnings;
-    this.dispatchNavigation({
-      type: "SET_OUTDOOR_ROUTE",
-      route: selected.route,
-    }, false);
-    if (selected.route.source === "google_routes") {
-      await this.announceLocally(
-        "Google walking routes may omit sidewalks or pedestrian paths. This app will use only the surveyed approach.",
-      );
-    } else if (selected.route.fallbackReason !== "disabled") {
-      await this.announceLocally(
-        "Google routing was unavailable or did not match the surveyed path. I will use the surveyed route.",
-      );
-    }
-    this.maybeRequestSceneCheck();
-    this.publish();
-  }
-
-  private dispatchNavigation(
-    event: NavigationEvent,
-    announce = true,
-  ): void {
-    if (!this.routeManifest || !this.navigationState) return;
-    const previous = this.navigationState;
-    const next = reduceNavigation(previous, event, this.routeManifest);
-    this.navigationState = next;
-    if (next.routeRevision !== previous.routeRevision) {
-      this.client.updateNavigation(navigationProgress(next, this.routeManifest));
-    }
-    if (next.status !== previous.status) {
-      this.status = next.status;
-      if (next.phase === "arrived") {
-        this.navigationState = markArrivalAnnounced(next);
-        if (announce) void this.announceLocally(next.status);
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else if (next.paused && !previous.paused) {
-        if (this.active && !this.paused) {
-          void this.pauseForRouteSafety(next.status);
-        } else if (announce) {
-          void this.announceLocally(next.status);
-        }
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      } else {
-        if (announce) void this.announceLocally(next.status);
-        void Haptics.selectionAsync();
-      }
-    }
-    this.maybeRequestSceneCheck();
-    this.publish();
-  }
-
-  private maybeRequestSceneCheck(): void {
-    const state = this.navigationState;
-    const manifest = this.routeManifest;
-    if (!state || !manifest || state.paused) return;
-    let allowedAnchorIds: string[] = [];
-    if (state.phase === "alignment" && state.outdoorRoute) {
-      allowedAnchorIds = [manifest.startAnchorId];
-    } else if (state.pendingVisualAnchorId) {
-      allowedAnchorIds = [state.pendingVisualAnchorId];
-    } else if (
-      state.phase === "vestibule_confirmation" &&
-      !state.vestibuleEvidenceAnalysisId
-    ) {
-      allowedAnchorIds = [manifest.arrivalAnchorId];
-    }
-    if (allowedAnchorIds.length > 0) {
-      this.client.requestSceneCheck(state.routeRevision, allowedAnchorIds);
-    }
-  }
-
-  private syncNavigationEpoch(): void {
-    this.dispatchNavigation(
-      { type: "SESSION_EPOCH", sessionEpoch: this.client.currentEpoch },
-      false,
-    );
-  }
-
-  private async pauseForRouteSafety(message: string): Promise<void> {
-    if (!this.active || this.paused) return;
-    this.paused = true;
-    this.camera.stop();
-    await Promise.all([
-      this.microphone.stop(),
-      Promise.resolve(this.location.stop()),
-    ]);
-    this.player.interrupt();
-    const epoch = this.client.command("pause");
-    this.dispatchNavigation({ type: "PAUSE", sessionEpoch: epoch }, false);
-    await deactivateKeepAwake(KEEP_AWAKE_TAG);
+    this.lastError = message;
     this.status = message;
-    await this.announceLocally(message);
+    this.connection = "failed";
     this.publish();
   }
 
-  private async announceLocally(text: string): Promise<void> {
-    this.player.stop();
-    const screenReader = await AccessibilityInfo.isScreenReaderEnabled();
-    if (screenReader) {
-      AccessibilityInfo.announceForAccessibility(text);
-      return;
-    }
-    Speech.stop();
-    Speech.speak(text, { language: "en-US", rate: 0.95 });
-  }
-
-  private publish(): void {
-    this.options.onSnapshot(this.getSnapshot());
-  }
-}
-
-function pcmBytesToInt16(bytes: Uint8Array): Int16Array {
-  if (bytes.length % 2 !== 0) throw new Error("PCM16 audio must have an even byte length");
-  const samples = new Int16Array(bytes.length / 2);
-  for (let index = 0; index < samples.length; index += 1) {
-    const value = bytes[index * 2] | (bytes[index * 2 + 1] << 8);
-    samples[index] = value >= 0x8000 ? value - 0x10000 : value;
-  }
-  return samples;
+  private publish(): void { this.options.onSnapshot(this.getSnapshot()); }
 }

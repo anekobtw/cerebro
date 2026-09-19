@@ -86,7 +86,8 @@ export class LocationTracker {
     let permission: Location.LocationPermissionResponse;
 
     try {
-      permission = await Location.requestForegroundPermissionsAsync();
+      permission = await Location.getForegroundPermissionsAsync();
+      if (!permission.granted) permission = await Location.requestForegroundPermissionsAsync();
     } catch (error) {
       if (currentRunId === this.runId) {
         this.publish({

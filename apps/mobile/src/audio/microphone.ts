@@ -101,7 +101,10 @@ export class MicrophoneStream {
     let permission: Awaited<ReturnType<typeof AudioManager.requestRecordingPermissions>>;
 
     try {
-      permission = await AudioManager.requestRecordingPermissions();
+      permission = await AudioManager.checkRecordingPermissions();
+      if (permission !== "Granted") {
+        permission = await AudioManager.requestRecordingPermissions();
+      }
     } catch (error) {
       this.starting = false;
       this.startInFlight = false;
@@ -151,7 +154,20 @@ export class MicrophoneStream {
       return;
     }
 
-    const started = await this.recorder.start();
+    let started: Awaited<ReturnType<AudioRecorder["start"]>>;
+    try {
+      started = await this.recorder.start();
+    } catch (error) {
+      this.starting = false;
+      this.startInFlight = false;
+      this.recorder.clearOnAudioReady();
+      this.recorder.clearOnError();
+      this.publish({ starting: false });
+      if (currentRunId === this.runId) {
+        this.fail(error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
 
     if (currentRunId !== this.runId) {
       if (started.status !== "error") {

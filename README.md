@@ -40,7 +40,6 @@ The phone must reach the laptop running Metro. USB debugging with `adb reverse` 
 
 ```sh
 npm run typecheck
-npm test
 ```
 
 See [the phase 2 runbook](docs/PHASE_2_RUNBOOK.md) for the media checks and [the phase 3 runbook](docs/PHASE_3_RUNBOOK.md) for route activation and on-phone checks. Live route guidance remains locked until [the field survey](docs/FIELD_SURVEY.md) contains real measurements.

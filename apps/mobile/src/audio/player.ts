@@ -227,7 +227,8 @@ export class PcmPlayer {
     if (this.queue === null) {
       const queue = context.createBufferQueueSource();
       queue.connect(context.destination);
-      queue.start();
+      // Audio API 0.13.5 defaults offset to -1 but rejects negative offsets.
+      queue.start(0, 0);
       this.queue = queue;
     }
 

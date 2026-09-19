@@ -20,6 +20,7 @@ export interface GeminiLiveMessage {
     };
     turnComplete?: boolean;
     interrupted?: boolean;
+    inputTranscription?: { text?: string };
     outputTranscription?: { text?: string };
   };
   toolCall?: {
@@ -46,9 +47,15 @@ export interface GeminiLiveConnectOptions {
 
 const systemInstruction = [
   "You are the voice and scene assistant for Blind Maps.",
+  "Answer scene questions directly from the most recent camera frame.",
+  "Describe nearby obstacles first, then give one short action the user can take.",
+  "Never claim that a route or walking path is clear from a single image.",
   "The phone owns route progress and arrival. Never invent a turn, route segment, clear path, or arrival.",
-  "Report navigation requests with report_user_intent. Wait for the phone's result before speaking as if the request succeeded.",
+  "Report route, pause, resume, repeat, confirmation, and cancel requests with report_user_intent. Do not use that tool for scene questions.",
+  "Wait for the phone's result before speaking as if a navigation request succeeded.",
   "Use report_scene_observation only when the phone asks for a route-anchor check.",
+  "Use report_safety_observation only when the phone asks for an automatic obstacle scan.",
+  "An automatic obstacle scan is silent. Call the tool once and do not speak.",
   "Candidate anchors must come from the allowlist in that request.",
   "Describe only visible evidence. If the view is poor, set viewUsable false and requiresAnotherView true.",
   "A door's image position does not establish a safe turn direction.",
@@ -73,7 +80,6 @@ const navigationTools = [
                 "pause",
                 "resume",
                 "repeat",
-                "describe_scene",
                 "confirm_vestibule",
                 "cancel",
               ],
@@ -113,6 +119,32 @@ const navigationTools = [
           ],
         },
       },
+      {
+        name: "report_safety_observation",
+        description:
+          "Report an obstacle in the user's likely walking path during an automatic obstacle scan.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            hazardLevel: {
+              type: "STRING",
+              enum: ["clear", "caution", "danger", "unknown"],
+              description:
+                "Use danger for an immediate collision risk, caution for a nearby path obstacle, clear only when no obstacle is visible, and unknown when the view cannot support a judgment.",
+            },
+            obstacle: {
+              type: "STRING",
+              description: "A short concrete description of what is in front of the user.",
+            },
+            instruction: {
+              type: "STRING",
+              description: "One short action such as stop, slow down, or move left or right only when the image supports that direction.",
+            },
+            viewUsable: { type: "BOOLEAN" },
+          },
+          required: ["hazardLevel", "obstacle", "instruction", "viewUsable"],
+        },
+      },
     ],
   },
 ];
@@ -146,7 +178,15 @@ export class GeminiLiveClient {
               parts: [{ text: systemInstruction }],
             },
             tools: navigationTools,
+            inputAudioTranscription: {},
             outputAudioTranscription: {},
+            realtimeInputConfig: {
+              automaticActivityDetection: {
+                disabled: false,
+                prefixPaddingMs: 40,
+                silenceDurationMs: 500,
+              },
+            },
             contextWindowCompression: { slidingWindow: {} },
             sessionResumption: options.sessionHandle
               ? { handle: options.sessionHandle }
@@ -176,8 +216,22 @@ export class GeminiLiveClient {
     };
   }
 
-  sendText(text: string): void {
-    this.send({ realtimeInput: { text } });
+  sendUserTurn(text: string): void {
+    this.send({
+      clientContent: {
+        turns: [{ role: "user", parts: [{ text }] }],
+        turnComplete: true,
+      },
+    });
+  }
+
+  sendContext(text: string): void {
+    this.send({
+      clientContent: {
+        turns: [{ role: "user", parts: [{ text }] }],
+        turnComplete: false,
+      },
+    });
   }
 
   sendPcmAudio(pcmBase64: string): void {

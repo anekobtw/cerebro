@@ -254,6 +254,18 @@ export const sceneObservationSchema = z.object({
 
 export type SceneObservation = z.infer<typeof sceneObservationSchema>;
 
+export const safetyObservationSchema = z.object({
+  analysisId: z.string().min(1),
+  sourceFrameId: z.string().min(1),
+  sourceCapturedAtMonotonicMs: z.number().finite().nonnegative(),
+  hazardLevel: z.enum(["clear", "caution", "danger", "unknown"]),
+  obstacle: z.string(),
+  instruction: z.string(),
+  viewUsable: z.boolean(),
+});
+
+export type SafetyObservation = z.infer<typeof safetyObservationSchema>;
+
 export const userIntentSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("request_destination"), destinationId: z.string().min(1) }),
   z.object({ kind: z.literal("confirm_destination") }),
