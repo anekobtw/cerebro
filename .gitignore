@@ -235,3 +235,4 @@ recordings/
 
 # Generated Android release artifacts
 releases/*.apk
+releases/*.zip

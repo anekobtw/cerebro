@@ -4,7 +4,7 @@ Hackathon monorepo for the Cerebro mobile assistant. Development runs locally on
 
 ## Download
 
-[Download the latest Android APK](https://github.com/anekobtw/cerebro/releases/latest/download/Cerebro.apk)
+[Download the latest Android app](https://github.com/anekobtw/cerebro/releases/latest/download/Cerebro%201.0.zip)
 
 iPhone users need to set up the app themselves; follow the [setup instructions](#setup). We are currently publishing Cerebro to the App Store and Google Play.
 
