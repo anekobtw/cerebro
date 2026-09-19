@@ -1,3 +1,4 @@
+export * from "./dynamic-guidance.js";
 export * from "./geometry.js";
 export * from "./manifest.js";
 export * from "./reducer.js";

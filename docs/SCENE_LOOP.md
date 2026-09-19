@@ -4,7 +4,7 @@ ElevenLabs Scribe recognizes speech. ElevenLabs TTS speaks the answers. Gemini r
 
 The assistant asks for a destination and says "The route is built." This is a placeholder. It makes no route requests and does not start location tracking.
 
-Only complete transcripts of "pause", "repeat", and "end assistant" trigger commands. Capitalization and sentence punctuation do not matter. Say "pause" again to resume. Say "repeat" to cancel capture and speech, clear the destination, and hear the destination question again. Capture stays stopped until a new destination is received and the placeholder announcement finishes. After the destination, other speech does not interrupt guidance or go to Gemini.
+Only complete transcripts of "pause", "repeat", and "stop" trigger commands. Capitalization and sentence punctuation do not matter. Say "pause" again to resume. Say "repeat" to cancel capture and speech, clear the destination, and hear the destination question again. Capture stays stopped until a new destination is received and the placeholder announcement finishes. After the destination, other speech does not interrupt guidance or go to Gemini.
 
 Capture waits for speech playback to finish. The first frame goes to Gemini. Later frames are decoded locally into a 32 by 32 grid. An upload requires at least 18 percent of cells to change by 24 RGB levels on average relative to the last described image. These thresholds need field tuning for hand movement and lighting. Failed requests retry without accepting a new baseline.
 
