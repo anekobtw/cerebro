@@ -24,7 +24,9 @@ export interface FrameCaptureStats {
   lastHeight: number | null;
   lastEncodedBytes: number;
   lastCaptureDurationMs: number | null;
+  medianCaptureDurationMs: number | null;
   slowestCaptureDurationMs: number;
+  captureRateFps: number | null;
   quality: number;
   temporaryFilesDeleted: number;
   temporaryFilesLeft: number;
@@ -49,7 +51,11 @@ export class FrameCaptureLoop {
   private readonly gate: CaptureGate;
   private readonly slot = new PendingFrameSlot<CameraFrame>();
   private timer: ReturnType<typeof setInterval> | null = null;
+  private runId = 0;
   private frameCounter = 0;
+  private captureDurationsMs: number[] = [];
+  private captureIntervalsMs: number[] = [];
+  private previousCaptureAtMs: number | null = null;
   private stats: FrameCaptureStats;
 
   constructor(private readonly options: FrameCaptureOptions) {
@@ -64,7 +70,9 @@ export class FrameCaptureLoop {
       lastHeight: null,
       lastEncodedBytes: 0,
       lastCaptureDurationMs: null,
+      medianCaptureDurationMs: null,
       slowestCaptureDurationMs: 0,
+      captureRateFps: null,
       quality: options.initialQuality ?? 0.6,
       temporaryFilesDeleted: 0,
       temporaryFilesLeft: 0,
@@ -85,14 +93,26 @@ export class FrameCaptureLoop {
       return;
     }
 
-    this.gate.reset();
+    this.runId += 1;
+    const currentRunId = this.runId;
+    this.captureDurationsMs = [];
+    this.captureIntervalsMs = [];
+    this.previousCaptureAtMs = null;
     this.timer = setInterval(() => {
-      void this.tick();
+      void this.tick(currentRunId);
     }, POLL_INTERVAL_MS);
-    this.publish({ running: true, lastError: null });
+    this.publish({
+      running: true,
+      lastError: null,
+      lastCaptureDurationMs: null,
+      medianCaptureDurationMs: null,
+      captureRateFps: null,
+    });
   }
 
   stop(): void {
+    this.runId += 1;
+
     if (this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;
@@ -102,7 +122,7 @@ export class FrameCaptureLoop {
     this.publish({ running: false });
   }
 
-  private async tick(): Promise<void> {
+  private async tick(currentRunId: number): Promise<void> {
     const decision = this.gate.decide(monotonicNowMs());
 
     if (decision !== "start") {
@@ -121,21 +141,29 @@ export class FrameCaptureLoop {
     const startedAtMs = monotonicNowMs();
     this.gate.markStarted(startedAtMs);
 
+    let temporaryUri: string | null = null;
+
     try {
       const picture = await camera.takePictureAsync({
         base64: true,
         quality: this.stats.quality,
         exif: false,
       });
+      temporaryUri = picture.uri;
 
       const capturedAtMonotonicMs = monotonicNowMs();
+
+      if (currentRunId !== this.runId || this.timer === null) {
+        return;
+      }
 
       if (picture.base64 === undefined) {
         this.publish({ lastError: "Camera returned no base64 payload" });
         return;
       }
 
-      this.deleteTemporaryFile(picture.uri);
+      this.deleteTemporaryFile(temporaryUri);
+      temporaryUri = null;
 
       this.frameCounter += 1;
       const encodedBytes = base64ByteLength(picture.base64);
@@ -151,7 +179,15 @@ export class FrameCaptureLoop {
       this.slot.put(frame);
       this.options.onFrame?.(frame);
 
-      const durationMs = capturedAtMonotonicMs - startedAtMs;
+      const durationMs = Math.round(capturedAtMonotonicMs - startedAtMs);
+      this.captureDurationsMs.push(durationMs);
+
+      if (this.previousCaptureAtMs !== null) {
+        this.captureIntervalsMs.push(capturedAtMonotonicMs - this.previousCaptureAtMs);
+      }
+      this.previousCaptureAtMs = capturedAtMonotonicMs;
+
+      const meanIntervalMs = mean(this.captureIntervalsMs);
 
       this.publish({
         framesCaptured: this.stats.framesCaptured + 1,
@@ -159,8 +195,10 @@ export class FrameCaptureLoop {
         lastWidth: frame.width,
         lastHeight: frame.height,
         lastEncodedBytes: encodedBytes,
-        lastCaptureDurationMs: Math.round(durationMs),
-        slowestCaptureDurationMs: Math.max(this.stats.slowestCaptureDurationMs, Math.round(durationMs)),
+        lastCaptureDurationMs: durationMs,
+        medianCaptureDurationMs: median(this.captureDurationsMs),
+        slowestCaptureDurationMs: Math.max(this.stats.slowestCaptureDurationMs, durationMs),
+        captureRateFps: meanIntervalMs === null ? null : 1000 / meanIntervalMs,
         quality: nextQuality(
           this.stats.quality,
           encodedBytes,
@@ -169,8 +207,13 @@ export class FrameCaptureLoop {
         lastError: null,
       });
     } catch (error) {
-      this.publish({ lastError: error instanceof Error ? error.message : String(error) });
+      if (currentRunId === this.runId) {
+        this.publish({ lastError: error instanceof Error ? error.message : String(error) });
+      }
     } finally {
+      if (temporaryUri !== null) {
+        this.deleteTemporaryFile(temporaryUri);
+      }
       this.gate.markFinished();
     }
   }
@@ -188,4 +231,23 @@ export class FrameCaptureLoop {
     this.stats = { ...this.stats, ...patch };
     this.options.onStats?.(this.getStats());
   }
+}
+
+function mean(values: readonly number[]): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function median(values: readonly number[]): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+
+  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 }

@@ -1,6 +1,6 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { PcmPlayer, type PlayerStats } from "../audio/player";
 import { FrameCaptureLoop, type FrameCaptureStats } from "../camera/frame-capture";
@@ -19,6 +19,8 @@ function formatStats(stats: object): string {
 export function DiagnosticsScreen({ onClose }: { onClose: () => void }): JSX.Element {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView | null>(null);
+  const captureRequested = useRef(false);
+  const locationRequested = useRef(false);
   const player = useMemo(() => new PcmPlayer(), []);
   const runner = useMemo(() => new AudioCheckRunner(player), [player]);
 
@@ -28,6 +30,7 @@ export function DiagnosticsScreen({ onClose }: { onClose: () => void }): JSX.Ele
   const [cameraStats, setCameraStats] = useState<FrameCaptureStats | null>(null);
   const [locationStats, setLocationStats] = useState<LocationStats | null>(null);
   const [pictureSize, setPictureSize] = useState<string | undefined>(undefined);
+  const [appIsActive, setAppIsActive] = useState(AppState.currentState === "active");
 
   const capture = useMemo(
     () =>
@@ -51,6 +54,29 @@ export function DiagnosticsScreen({ onClose }: { onClose: () => void }): JSX.Ele
     };
   }, [capture, player, tracker]);
 
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      const active = state === "active";
+      setAppIsActive(active);
+
+      if (!active) {
+        capture.stop();
+        tracker.stop();
+        player.stop();
+        return;
+      }
+
+      if (captureRequested.current) {
+        capture.start();
+      }
+      if (locationRequested.current) {
+        void tracker.start();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [capture, player, tracker]);
+
   const runCheck = useCallback(
     async (id: number) => {
       setRunningCheck(id);
@@ -68,14 +94,42 @@ export function DiagnosticsScreen({ onClose }: { onClose: () => void }): JSX.Ele
   }, [runCheck]);
 
   const startCamera = useCallback(async () => {
-    if (cameraPermission?.granted !== true) {
-      await requestCameraPermission();
+    captureRequested.current = true;
+    const permission =
+      cameraPermission?.granted === true ? cameraPermission : await requestCameraPermission();
+
+    if (!permission.granted) {
+      captureRequested.current = false;
+      capture.stop();
+      return;
     }
 
+    if (appIsActive) {
+      capture.start();
+    }
+  }, [appIsActive, cameraPermission, capture, requestCameraPermission]);
+
+  const stopCamera = useCallback(() => {
+    captureRequested.current = false;
+    capture.stop();
+  }, [capture]);
+
+  const cameraReady = useCallback(async () => {
     const sizes = (await cameraRef.current?.getAvailablePictureSizesAsync()) ?? [];
     setPictureSize(choosePictureSize(sizes, TARGET_LONG_EDGE_PX) ?? undefined);
-    capture.start();
-  }, [cameraPermission?.granted, capture, requestCameraPermission]);
+  }, []);
+
+  const startLocation = useCallback(async () => {
+    locationRequested.current = true;
+    if (appIsActive) {
+      await tracker.start();
+    }
+  }, [appIsActive, tracker]);
+
+  const stopLocation = useCallback(() => {
+    locationRequested.current = false;
+    tracker.stop();
+  }, [tracker]);
 
   return (
     <ScrollView contentContainerStyle={styles.content} style={styles.screen}>
@@ -101,7 +155,7 @@ export function DiagnosticsScreen({ onClose }: { onClose: () => void }): JSX.Ele
         style={[styles.button, runningCheck !== null && styles.buttonDisabled]}
       >
         <Text style={styles.buttonText}>
-          {runningCheck === null ? "Run all audio checks test" : `Running check ${runningCheck}`}
+          {runningCheck === null ? "Run all audio checks" : `Running check ${runningCheck}`}
         </Text>
       </Pressable>
 
@@ -132,19 +186,26 @@ export function DiagnosticsScreen({ onClose }: { onClose: () => void }): JSX.Ele
         Continuous camera
       </Text>
       <View style={styles.previewRow}>
-        <CameraView
-          active
-          animateShutter={false}
-          mute
-          pictureSize={pictureSize}
-          ref={cameraRef}
-          style={styles.preview}
-        />
+        {cameraPermission?.granted === true ? (
+          <CameraView
+            active={appIsActive}
+            animateShutter={false}
+            mute
+            onCameraReady={() => void cameraReady()}
+            pictureSize={pictureSize}
+            ref={cameraRef}
+            style={styles.preview}
+          />
+        ) : (
+          <View style={[styles.preview, styles.previewUnavailable]}>
+            <Text style={styles.previewUnavailableText}>Camera permission needed</Text>
+          </View>
+        )}
         <View style={styles.previewControls}>
           <Pressable accessibilityRole="button" onPress={() => void startCamera()} style={styles.button}>
             <Text style={styles.buttonText}>Start capture loop</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => capture.stop()} style={styles.secondaryButton}>
+          <Pressable accessibilityRole="button" onPress={stopCamera} style={styles.secondaryButton}>
             <Text style={styles.secondaryButtonText}>Stop capture loop</Text>
           </Pressable>
           <Text style={styles.detail}>{`picture size: ${pictureSize ?? "device default"}`}</Text>
@@ -155,10 +216,10 @@ export function DiagnosticsScreen({ onClose }: { onClose: () => void }): JSX.Ele
       <Text accessibilityRole="header" style={styles.sectionTitle}>
         Location
       </Text>
-      <Pressable accessibilityRole="button" onPress={() => void tracker.start()} style={styles.button}>
+      <Pressable accessibilityRole="button" onPress={() => void startLocation()} style={styles.button}>
         <Text style={styles.buttonText}>Start location updates</Text>
       </Pressable>
-      <Pressable accessibilityRole="button" onPress={() => tracker.stop()} style={styles.secondaryButton}>
+      <Pressable accessibilityRole="button" onPress={stopLocation} style={styles.secondaryButton}>
         <Text style={styles.secondaryButtonText}>Stop location updates</Text>
       </Pressable>
       <Text style={styles.mono}>
@@ -204,5 +265,7 @@ const styles = StyleSheet.create({
   mono: { color: "#222222", fontFamily: "monospace", fontSize: 12 },
   previewRow: { flexDirection: "row", gap: 12 },
   preview: { borderRadius: 8, height: 160, width: 120 },
+  previewUnavailable: { alignItems: "center", backgroundColor: "#eeeeee", justifyContent: "center", padding: 8 },
+  previewUnavailableText: { color: "#444444", fontSize: 13, textAlign: "center" },
   previewControls: { flex: 1, gap: 8 },
 });

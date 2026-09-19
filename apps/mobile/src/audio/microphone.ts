@@ -20,6 +20,7 @@ export const TARGET_CHUNK_MS = 100;
 
 export interface MicrophoneStats {
   running: boolean;
+  starting: boolean;
   muted: boolean;
   requestedSampleRateHz: number;
   observedSampleRateHz: number | null;
@@ -50,6 +51,9 @@ export class MicrophoneStream {
   private chunkIndex = 0;
   private muted = false;
   private running = false;
+  private starting = false;
+  private startInFlight = false;
+  private runId = 0;
   private stats: MicrophoneStats;
 
   constructor(private readonly options: MicrophoneOptions) {
@@ -58,6 +62,7 @@ export class MicrophoneStream {
     this.chunker = new PcmChunker(samplesForDurationMs(this.targetSampleRateHz, this.chunkMs));
     this.stats = {
       running: false,
+      starting: false,
       muted: false,
       requestedSampleRateHz: this.targetSampleRateHz,
       observedSampleRateHz: null,
@@ -82,18 +87,46 @@ export class MicrophoneStream {
   }
 
   async start(): Promise<void> {
-    if (this.running) {
+    if (this.running || this.startInFlight) {
       return;
     }
 
-    const permission = await AudioManager.requestRecordingPermissions();
+    this.runId += 1;
+    const currentRunId = this.runId;
+    this.starting = true;
+    this.startInFlight = true;
+    this.publish({ starting: true, lastError: null });
+
+    let permission: Awaited<ReturnType<typeof AudioManager.requestRecordingPermissions>>;
+
+    try {
+      permission = await AudioManager.requestRecordingPermissions();
+    } catch (error) {
+      this.starting = false;
+      this.startInFlight = false;
+      this.publish({ starting: false });
+      this.fail(error instanceof Error ? error.message : String(error));
+      return;
+    }
+
+    if (currentRunId !== this.runId) {
+      this.startInFlight = false;
+      return;
+    }
 
     if (permission !== "Granted") {
+      this.starting = false;
+      this.startInFlight = false;
+      this.publish({ starting: false });
       this.fail(`Microphone permission ${permission}`);
       return;
     }
 
-    this.recorder.onError((error) => this.fail(error.message));
+    this.recorder.onError((error) => {
+      if (currentRunId === this.runId) {
+        this.fail(error.message);
+      }
+    });
 
     const subscription = this.recorder.onAudioReady(
       {
@@ -101,37 +134,62 @@ export class MicrophoneStream {
         bufferLength: samplesForDurationMs(this.targetSampleRateHz, this.chunkMs),
         channelCount: 1,
       },
-      (event) => this.handleBuffer(event.buffer, event.numFrames),
+      (event) => {
+        if (currentRunId === this.runId) {
+          this.handleBuffer(event.buffer, event.numFrames);
+        }
+      },
     );
 
     if (subscription.status === "error") {
+      this.starting = false;
+      this.startInFlight = false;
+      this.recorder.clearOnError();
+      this.publish({ starting: false });
       this.fail(subscription.message);
       return;
     }
 
     const started = await this.recorder.start();
 
+    if (currentRunId !== this.runId) {
+      if (started.status !== "error") {
+        await this.recorder.stop();
+      }
+      this.recorder.clearOnAudioReady();
+      this.recorder.clearOnError();
+      this.startInFlight = false;
+      return;
+    }
+
     if (started.status === "error") {
+      this.starting = false;
+      this.startInFlight = false;
+      this.recorder.clearOnAudioReady();
+      this.recorder.clearOnError();
+      this.publish({ starting: false });
       this.fail(started.message);
       return;
     }
 
+    this.starting = false;
+    this.startInFlight = false;
     this.running = true;
-    this.publish({ running: true, lastError: null });
+    this.publish({ running: true, starting: false, lastError: null });
   }
 
   async stop(): Promise<void> {
-    if (!this.running) {
-      return;
-    }
-
+    this.runId += 1;
     this.running = false;
-    await this.recorder.stop();
+    this.starting = false;
+    if (this.recorder.isRecording()) {
+      await this.recorder.stop();
+    }
     this.recorder.clearOnAudioReady();
     this.recorder.clearOnError();
     this.chunker.reset();
     this.resampler?.reset();
-    this.publish({ running: false });
+    this.publish({ running: false, starting: false });
   }
 
   private handleBuffer(buffer: AudioBufferInput, numFrames: number): void {

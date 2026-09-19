@@ -80,27 +80,34 @@ export class PcmPlayer {
     };
   }
 
-  beginUtterance(utteranceId: string, epoch: number): void {
+  beginUtterance(utteranceId: string, epoch: number): EnqueueResult {
     if (epoch < this.activeEpoch) {
-      this.reject("stale-epoch");
-      return;
+      return this.reject("stale-epoch");
+    }
+
+    if (epoch !== this.activeEpoch || utteranceId !== this.activeUtteranceId) {
+      this.stopQueue();
+      this.resampler = null;
     }
 
     this.activeEpoch = epoch;
     this.activeUtteranceId = utteranceId;
     this.publish();
+    return "queued";
   }
 
   enqueue(chunk: PlayableChunk): EnqueueResult {
-    if (chunk.epoch < this.activeEpoch) {
+    if (chunk.epoch !== this.activeEpoch) {
       return this.reject("stale-epoch");
     }
 
-    if (this.activeUtteranceId !== null && chunk.utteranceId !== this.activeUtteranceId) {
+    if (chunk.utteranceId !== this.activeUtteranceId) {
       return this.reject("stale-utterance");
     }
 
-    if (this.queuedMs > this.maxQueuedMs) {
+    const incomingDurationMs = (chunk.samples.length / chunk.sampleRateHz) * 1000;
+
+    if (this.queuedMs + incomingDurationMs > this.maxQueuedMs) {
       return this.reject("queue-full");
     }
 
@@ -110,6 +117,7 @@ export class PcmPlayer {
       const samples = this.toContextRate(context, chunk);
       const buffer = context.createBuffer(1, samples.length, context.sampleRate);
 
+      this.declaredSampleRateHz = chunk.sampleRateHz;
       buffer.copyToChannel(samples, 0);
       queue.enqueueBuffer(buffer);
 
@@ -137,7 +145,11 @@ export class PcmPlayer {
   }): EnqueueResult {
     const { utteranceId, epoch, sampleRateHz, samples, chunkSamples = sampleRateHz / 10 } = options;
 
-    this.beginUtterance(utteranceId, epoch);
+    const begun = this.beginUtterance(utteranceId, epoch);
+
+    if (begun !== "queued") {
+      return begun;
+    }
 
     let result: EnqueueResult = "queued";
 
@@ -165,6 +177,13 @@ export class PcmPlayer {
   }
 
   stop(): void {
+    this.stopQueue();
+    this.resampler = null;
+    this.activeUtteranceId = null;
+    this.publish();
+  }
+
+  private stopQueue(): void {
     if (this.queue !== null) {
       try {
         this.queue.stop();
@@ -175,9 +194,7 @@ export class PcmPlayer {
       this.queue = null;
     }
 
-    this.activeUtteranceId = null;
     this.playbackEndsAtContextTime = this.context?.currentTime ?? 0;
-    this.publish();
   }
 
   async close(): Promise<void> {

@@ -37,14 +37,18 @@ If check 7 fails, the options in order of preference:
 
 Switching provider from ElevenLabs to Gemini native audio does not fix this. It is a device-level problem.
 
+Each utterance gets a new native buffer queue. Starting another utterance stops and disconnects the old queue, even when both utterances use the same session epoch. An interruption raises the epoch as well, so a late packet from the cancelled response fails before it can reach the new queue.
+
 ## Continuous camera, plan section 5.3
 
 One preview stays mounted and the loop polls every 100 ms. A capture starts only when no capture is in flight and at least one second has passed since the last one started, so a slow capture cannot queue a backlog. `animateShutter` is off and no user action is involved. Only the newest completed frame is kept; replacements are counted in `framesReplaced`. Each temporary file is deleted right after the base64 payload is read, and `temporaryFilesLeft` counts any deletion that failed.
 
+The loop drops a capture that finishes after stop, but still deletes its temporary file. The diagnostics screen suspends capture when the app leaves the foreground and restarts it on return only if the operator had left the loop enabled.
+
 Record from the device:
 
-- Capture duration, median and worst, from `lastCaptureDurationMs` and `slowestCaptureDurationMs`.
-- Achieved rate against the 1 FPS ceiling.
+- Capture duration from `lastCaptureDurationMs`, `medianCaptureDurationMs`, and `slowestCaptureDurationMs`.
+- Achieved rate from `captureRateFps` against the 1 FPS ceiling.
 - Picture size chosen by `choosePictureSize` (target long edge 768 px) and the encoded size per frame against the 150 KiB budget.
 - Whether the entrance sign is readable at that size. Only raise the resolution if it is not.
 - Behavior when the app goes to the background and returns.
@@ -53,4 +57,6 @@ Record from the device:
 
 `watchPositionAsync` runs at `BestForNavigation` with a one second interval. Travel heading comes from GPS course over ground and is null below 0.5 m/s, because Android reports a heading of 0 when standing still. Device heading from `watchHeadingAsync` is reported separately and must never be used as the walking direction. Position timestamps are converted to the phone's monotonic clock at the boundary, so frame and sample ages never mix two clocks.
 
-Record from the device: horizontal accuracy on the route, how long the first fix takes, how often travel heading is available while walking, and the observed sample age.
+The tracker ignores callbacks from a stopped run. It also removes a partly started position subscription if heading setup fails or the app moves to the background during startup.
+
+Record `bestAccuracyM`, `worstAccuracyM`, `firstFixDelayMs`, `travelHeadingAvailabilityPercent`, and `lastSampleAgeMs` while walking the route.
