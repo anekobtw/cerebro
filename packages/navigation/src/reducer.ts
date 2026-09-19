@@ -4,7 +4,7 @@ import type {
   RouteManifest,
   SceneObservation,
   SessionOutdoorRoute,
-} from "@blind-maps/contracts";
+} from "@cerebro/contracts";
 
 import {
   bearingDegrees,

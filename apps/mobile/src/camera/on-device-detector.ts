@@ -14,7 +14,7 @@ interface ObjectDetectionModule {
   detectJpeg(base64Jpeg: string): Promise<{ objects: DetectedObject[] }>;
 }
 
-const nativeModule = NativeModules.BlindMapsObjectDetection as ObjectDetectionModule | undefined;
+const nativeModule = NativeModules.CerebroObjectDetection as ObjectDetectionModule | undefined;
 
 /** Returns no result on non-Android builds, where the native ML Kit module is unavailable. */
 export async function detectObjects(frame: CameraFrame): Promise<DetectedObject[] | null> {

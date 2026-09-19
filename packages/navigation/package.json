@@ -1,5 +1,5 @@
 {
-  "name": "@blind-maps/navigation",
+"name": "@cerebro/navigation",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -8,6 +8,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@blind-maps/contracts": "0.0.0"
+    "@cerebro/contracts": "0.0.0"
   }
 }

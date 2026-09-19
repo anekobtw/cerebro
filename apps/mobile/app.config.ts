@@ -11,8 +11,8 @@ if (existsSync(repositoryEnvPath)) {
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: config.name ?? "Blind Maps",
-  slug: config.slug ?? "blind-maps",
+  name: config.name ?? "Cerebro",
+  slug: config.slug ?? "cerebro",
   extra: {
     ...config.extra,
     provider: {

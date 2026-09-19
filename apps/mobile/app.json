@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "Blind Maps",
-    "slug": "blind-maps",
+    "name": "Cerebro",
+    "slug": "cerebro",
     "version": "0.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "android": {
-      "package": "com.blindmaps.mobile",
+      "package": "com.cerebro.mobile",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
@@ -23,21 +23,21 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Blind Maps to use the camera for navigation assistance.",
-          "microphonePermission": "Allow Blind Maps to use the microphone for voice assistance.",
+          "cameraPermission": "Allow Cerebro to use the camera for navigation assistance.",
+          "microphonePermission": "Allow Cerebro to use the microphone for voice assistance.",
           "recordAudioAndroid": true
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow Blind Maps to use your location while navigating."
+          "locationWhenInUsePermission": "Allow Cerebro to use your location while navigating."
         }
       ],
       [
         "react-native-audio-api",
         {
-          "iosMicrophonePermission": "Allow Blind Maps to use the microphone for voice assistance.",
+          "iosMicrophonePermission": "Allow Cerebro to use the microphone for voice assistance.",
           "androidPermissions": [
             "android.permission.FOREGROUND_SERVICE",
             "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"

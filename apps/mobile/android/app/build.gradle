@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.blindmaps.mobile'
+    namespace 'com.cerebro.mobile'
     defaultConfig {
-        applicationId 'com.blindmaps.mobile'
+        applicationId 'com.cerebro.mobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

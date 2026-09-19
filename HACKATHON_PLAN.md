@@ -1,4 +1,4 @@
-# Blind Maps hackathon implementation plan
+# Cerebro hackathon implementation plan
 
 Status: phase 3 code is implemented. The field survey, route activation, and on-phone acceptance checks remain.
 
@@ -154,7 +154,7 @@ Choose a Node LTS version supported by the generated Expo SDK. Record its exact 
 ### 4.2 Target structure
 
 ```text
-blind-maps/
+cerebro/
   HACKATHON_PLAN.md
   README.md
   package.json
@@ -207,18 +207,18 @@ npx create-expo-app@latest apps/mobile --template blank-typescript --no-install
 
 The blank TypeScript template is sufficient for one main screen and a developer diagnostics screen. Do not add a router merely to move between these two states. [Template options](https://docs.expo.dev/more/create-expo/).
 
-Inspect any generated instructions before using them. Name the mobile workspace `@blind-maps/mobile`. Create the shared package manifests, then run one root installation.
+Inspect any generated instructions before using them. Name the mobile workspace `@cerebro/mobile`. Create the shared package manifests, then run one root installation.
 
 The root manifest exposes these shared scripts:
 
 ```json
 {
-  "name": "blind-maps",
+  "name": "cerebro",
   "version": "0.0.0",
   "private": true,
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "dev:mobile": "npm run start --workspace @blind-maps/mobile",
+    "dev:mobile": "npm run start --workspace @cerebro/mobile",
     "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }
@@ -228,7 +228,7 @@ Every workspace must define `typecheck`; `--if-present` is only for initializati
 
 Install TypeScript and Node types at the root. Use Zod for runtime validation. Keep direct provider calls behind a mobile provider adapter. Exact versions are selected once and committed in `package-lock.json`.
 
-Shared packages may export TypeScript source for Metro during this hackathon. Give each a real package manifest and TypeScript configuration. Use package imports such as `@blind-maps/contracts`, not imports that traverse several parent directories.
+Shared packages may export TypeScript source for Metro during this hackathon. Give each a real package manifest and TypeScript configuration. Use package imports such as `@cerebro/contracts`, not imports that traverse several parent directories.
 
 For the mobile application, install Expo-compatible packages through Expo:
 
@@ -274,8 +274,8 @@ A finishes the baseline, checks it, commits it, and puts it on the team's shared
 B then runs these future commands on Arch Linux:
 
 ```bash
-git clone <repository-url> blind-maps
-cd blind-maps
+git clone <repository-url> cerebro
+cd cerebro
 git switch <shared-baseline-branch>
 npm ci
 cp .env.example .env

@@ -1,5 +1,5 @@
-import type { GeoPoint, PlaceCandidate } from "@blind-maps/contracts";
-import { distanceMeters } from "@blind-maps/navigation";
+import type { GeoPoint, PlaceCandidate } from "@cerebro/contracts";
+import { distanceMeters } from "@cerebro/navigation";
 import { z } from "zod";
 
 const SEARCH_TEXT_URL = "https://places.googleapis.com/v1/places:searchText";

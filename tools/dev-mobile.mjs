@@ -32,7 +32,7 @@ const expo = spawn(
     "run",
     "android",
     "--workspace",
-    "@blind-maps/mobile",
+    "@cerebro/mobile",
     "--",
     "--lan",
     "--port",

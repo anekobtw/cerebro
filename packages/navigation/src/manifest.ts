@@ -1,7 +1,7 @@
 import {
   routeManifestSchema,
   type RouteManifest,
-} from "@blind-maps/contracts";
+} from "@cerebro/contracts";
 
 export type RouteLoadResult =
   | { available: true; manifest: RouteManifest }

@@ -68,7 +68,7 @@ export default function App(): JSX.Element {
   const active = snapshot?.active === true;
   const paused = snapshot?.paused === true;
   const failed = snapshot?.connection === "failed";
-  const status = snapshot?.status ?? "Starting Blind Maps";
+  const status = snapshot?.status ?? "Starting Cerebro";
 
   return (
     <View style={styles.container}>
@@ -89,7 +89,7 @@ export default function App(): JSX.Element {
         <View accessibilityLiveRegion="polite" style={styles.statusCard}>
           <View style={[styles.signal, active && !paused && styles.signalActive]} />
           <View style={styles.statusCopy}>
-            <Text style={styles.brand}>BLIND MAPS</Text>
+            <Text style={styles.brand}>CEREBRO</Text>
             <Text accessibilityRole="header" numberOfLines={3} style={styles.status}>
               {status}
             </Text>

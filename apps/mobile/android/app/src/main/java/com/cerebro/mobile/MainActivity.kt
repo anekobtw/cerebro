@@ -1,4 +1,4 @@
-package com.blindmaps.mobile
+package com.cerebro.mobile
 
 import android.os.Build
 import android.os.Bundle

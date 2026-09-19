@@ -5,12 +5,12 @@ import type {
   PlaceCandidate,
   RouteManifest,
   SessionOutdoorRoute,
-} from "@blind-maps/contracts";
+} from "@cerebro/contracts";
 import {
   distanceMeters,
   distanceToPolylineMeters,
   polylineLengthMeters,
-} from "@blind-maps/navigation";
+} from "@cerebro/navigation";
 import { z } from "zod";
 
 const COMPUTE_ROUTES_URL =

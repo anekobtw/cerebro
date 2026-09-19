@@ -1,8 +1,8 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { AudioManager } from "react-native-audio-api";
 import type { CameraView } from "expo-camera";
-import type { NavigationPhase, PlaceCandidate, ProviderMode } from "@blind-maps/contracts";
-import type { GuidanceLocation } from "@blind-maps/navigation";
+import type { NavigationPhase, PlaceCandidate, ProviderMode } from "@cerebro/contracts";
+import type { GuidanceLocation } from "@cerebro/navigation";
 import { SpeechOutput } from "../audio/speech-output";
 import { EchoGuard } from "../audio/echo-guard";
 import { MicrophoneStream, type MicrophoneStats } from "../audio/microphone";
@@ -21,7 +21,7 @@ import { speechSampleRateHz } from "../providers/elevenlabs-tts";
 import { monotonicNowMs } from "./clock";
 export type ConnectionState = "idle" | "connecting" | "connected" | "failed";
 
-const KEEP_AWAKE_TAG = "blind-maps-navigation";
+const KEEP_AWAKE_TAG = "cerebro-navigation";
 const FIX_ACCURACY_TARGET_M = 25;
 const FIX_WAIT_TIMEOUT_MS = 15_000;
 // Scribe commits whole phrases, so "yes please" and "no, the other one" have to

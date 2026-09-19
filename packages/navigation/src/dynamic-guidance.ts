@@ -2,7 +2,7 @@ import type {
   DynamicRoute,
   GeoPoint,
   NavigationPhase,
-} from "@blind-maps/contracts";
+} from "@cerebro/contracts";
 
 import {
   bearingDegrees,

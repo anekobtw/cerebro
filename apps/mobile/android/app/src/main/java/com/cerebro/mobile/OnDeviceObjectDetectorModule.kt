@@ -1,4 +1,4 @@
-package com.blindmaps.mobile
+package com.cerebro.mobile
 
 import android.graphics.BitmapFactory
 import android.util.Base64
@@ -29,7 +29,7 @@ class OnDeviceObjectDetectorModule(
       .build(),
   )
 
-  override fun getName() = "BlindMapsObjectDetection"
+  override fun getName() = "CerebroObjectDetection"
 
   @ReactMethod
   fun detectJpeg(base64Jpeg: String, promise: Promise) {

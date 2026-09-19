@@ -1,6 +1,6 @@
-# Blind Maps
+# Cerebro
 
-Hackathon monorepo for the Blind Maps mobile assistant. Development runs locally on a Pixel. The app connects directly to the configured cloud providers and has no Blind Maps backend.
+Hackathon monorepo for the Cerebro mobile assistant. Development runs locally on a Pixel. The app connects directly to the configured cloud providers and has no Cerebro backend.
 
 ## Prerequisites
 

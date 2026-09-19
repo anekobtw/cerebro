@@ -1,4 +1,4 @@
-package com.blindmaps.mobile
+package com.cerebro.mobile
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule

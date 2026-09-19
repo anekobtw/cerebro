@@ -2,7 +2,7 @@ import type {
   DynamicRoute,
   NavigationPhase,
   PlaceCandidate,
-} from "@blind-maps/contracts";
+} from "@cerebro/contracts";
 import {
   DEFAULT_DYNAMIC_GUIDANCE_CONFIG,
   bearingToTarget,
@@ -15,7 +15,7 @@ import {
   type DynamicGuidanceConfig,
   type DynamicGuidanceState,
   type GuidanceLocation,
-} from "@blind-maps/navigation";
+} from "@cerebro/navigation";
 
 import { providerConfig } from "../providers/config";
 import { monotonicNowMs } from "../session/clock";

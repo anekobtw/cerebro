@@ -1,4 +1,4 @@
-import type { GeoPoint } from "@blind-maps/contracts";
+import type { GeoPoint } from "@cerebro/contracts";
 
 const EARTH_RADIUS_M = 6_371_008.8;
 
