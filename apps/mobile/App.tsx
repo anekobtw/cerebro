@@ -23,7 +23,7 @@ export default function App(): JSX.Element {
           Blind Maps
         </Text>
         <Text accessibilityLiveRegion="polite" style={styles.status}>
-          Not connected
+          Not connected — OTA test update
         </Text>
         <Pressable
           accessibilityHint="Connects to the navigation assistant"
