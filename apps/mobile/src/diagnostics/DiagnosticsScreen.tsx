@@ -101,7 +101,7 @@ export function DiagnosticsScreen({ onClose }: { onClose: () => void }): JSX.Ele
         style={[styles.button, runningCheck !== null && styles.buttonDisabled]}
       >
         <Text style={styles.buttonText}>
-          {runningCheck === null ? "Run all audio checks" : `Running check ${runningCheck}`}
+          {runningCheck === null ? "Run all audio checks test" : `Running check ${runningCheck}`}
         </Text>
       </Pressable>
 
