@@ -1,5 +1,7 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import type { CameraView } from "expo-camera";
+import type { NavigationPhase, PlaceCandidate, ProviderMode } from "@blind-maps/contracts";
+import type { GuidanceLocation } from "@blind-maps/navigation";
 import { SpeechOutput } from "../audio/speech-output";
 import { EchoGuard } from "../audio/echo-guard";
 import { MicrophoneStream, type MicrophoneStats } from "../audio/microphone";
@@ -7,6 +9,9 @@ import { PcmPlayer, type PlayerStats } from "../audio/player";
 import { FrameCaptureLoop, type FrameCaptureStats } from "../camera/frame-capture";
 import type { CameraFrame } from "../camera/types";
 import { sceneChanged, sceneSignature } from "../camera/scene-difference";
+import { LocationTracker, type LocationStats } from "../location/tracking";
+import type { LocationSample } from "../location/types";
+import { DynamicNavigator, type DestinationSearchResult } from "../navigation/navigator";
 import { ElevenLabsRealtimeClient } from "../providers/elevenlabs-realtime";
 import { describeScene, SceneRequestError } from "../providers/gemini-scene";
 import { providerConfig } from "../providers/config";
@@ -15,6 +20,12 @@ import { monotonicNowMs } from "./clock";
 export type ConnectionState = "idle" | "connecting" | "connected" | "failed";
 
 const KEEP_AWAKE_TAG = "blind-maps-navigation";
+const FIX_ACCURACY_TARGET_M = 25;
+const FIX_WAIT_TIMEOUT_MS = 15_000;
+// Scribe commits whole phrases, so "yes please" and "no, the other one" have to
+// match as well as a bare word.
+const AFFIRMATIVE = /\b(yes|yeah|yep|yup|sure|correct|confirm|go there|take me there|that one)\b/;
+const NEXT_OPTION = /\b(no|nope|next|another|different|something else|other one)\b/;
 export interface NavigationSessionSnapshot {
   destination: string | null;
   audioChunksSent: number;
@@ -23,11 +34,22 @@ export interface NavigationSessionSnapshot {
   paused: boolean;
   status: string;
   connection: ConnectionState;
-  provider: "gemini_text_elevenlabs" | null;
+  provider: ProviderMode | null;
   frameAgeMs: number | null;
   microphone: MicrophoneStats;
   playback: PlayerStats;
   camera: FrameCaptureStats;
+  location: LocationStats;
+  routeId: string | null;
+  routeVersion: number | null;
+  routeAvailable: boolean;
+  navigationPhase: NavigationPhase | null;
+  currentSegmentId: string | null;
+  routeSource: "google_routes" | null;
+  routeRequestCount: number;
+  routeFallbackReason: null;
+  routeFailureDetail: string | null;
+  providerWarnings: string[];
   lastAssistantText: string | null;
   lastUserText: string | null;
   lastError: string | null;
@@ -61,7 +83,21 @@ export class NavigationSessionController {
   private analysisAbort: AbortController | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private connectReject: ((error: Error) => void) | null = null;
+  private pendingCandidate: PlaceCandidate | null = null;
+  private awaitingConfirmation = false;
+  private announcing = false;
+  private pendingAnnouncement: string | null = null;
+  private rerouting = false;
+  private lastLocation: LocationSample | null = null;
+  private deviceHeadingDeg: number | null = null;
   private readonly echoGuard = new EchoGuard();
+  private readonly navigator = new DynamicNavigator();
+  private readonly location = new LocationTracker({
+    onSample: (sample) => this.handleLocationSample(sample),
+    onOrientation: (sample) => {
+      this.deviceHeadingDeg = sample.trueHeadingDeg ?? sample.magneticHeadingDeg;
+    },
+  });
   private readonly recognizer = new ElevenLabsRealtimeClient();
   private readonly player: PcmPlayer;
   private readonly speech: SpeechOutput;
@@ -118,7 +154,16 @@ export class NavigationSessionController {
       audioChunksSent: this.audioChunksSent, framesSent: this.framesSent,
       frameAgeMs: this.lastFrameAtMs === null ? null : Math.round(monotonicNowMs() - this.lastFrameAtMs),
       microphone: this.microphone.getStats(), playback: this.player.getStats(),
-      camera: this.camera.getStats(),
+      camera: this.camera.getStats(), location: this.location.getStats(),
+      routeId: this.navigator.routeId, routeVersion: null,
+      routeAvailable: this.navigator.activeRoute !== null,
+      navigationPhase: this.navigator.phase,
+      currentSegmentId: this.navigator.currentStepId,
+      routeSource: this.navigator.activeRoute === null ? null : "google_routes",
+      routeRequestCount: this.navigator.routeRequestCount,
+      routeFallbackReason: null,
+      routeFailureDetail: this.navigator.lastFailureDetail,
+      providerWarnings: this.navigator.warnings,
       lastAssistantText: this.lastAssistantText, lastUserText: this.lastUserText, lastError: this.lastError,
     };
   }
@@ -129,6 +174,10 @@ export class NavigationSessionController {
     const generation = ++this.generation;
     this.paused = false;
     this.destination = null;
+    this.pendingCandidate = null;
+    this.awaitingConfirmation = false;
+    this.pendingAnnouncement = null;
+    this.navigator.reset();
     this.previousFrame = null;
     this.lastError = null;
     this.lastUserText = null;
@@ -146,6 +195,10 @@ export class NavigationSessionController {
       void providerConfig.elevenLabsTtsModelId;
       speechSampleRateHz();
       await activateKeepAwakeAsync(KEEP_AWAKE_TAG);
+      if (generation !== this.generation) return;
+      // Started before the speech connection so a fix has time to settle while
+      // the user is still being asked where they want to go.
+      await this.location.start();
       if (generation !== this.generation) return;
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error("Speech recognition connection timed out")), 15_000);
@@ -180,21 +233,203 @@ export class NavigationSessionController {
   private async handleTranscript(text: string): Promise<void> {
     if (!this.active) return;
     const command = text.toLowerCase().replace(/[.,!?]/g, "").replace(/\s+/g, " ").trim();
-    if (command === "end assistant") { await this.end(); return; }
+    this.lastUserText = text.trim();
+    if (command === "stop") { await this.end(); return; }
     if (command === "pause") { await (this.paused ? this.resume() : this.pause()); return; }
     if (command === "repeat") { await this.repeat(); return; }
-    if (this.destination || this.paused) return;
+    if (command === "change destination" || command === "new destination") {
+      await this.promptForDestination();
+      return;
+    }
+    if (this.paused) return;
+    if (command === "where am i" || command === "which way") { await this.announcePosition(); return; }
+    if (this.awaitingConfirmation) { await this.handleConfirmation(command); return; }
+    if (this.destination) return;
     if (!this.listeningForDestination || !text.trim()) return;
     this.listeningForDestination = false;
-    this.destination = text.trim();
-    this.lastUserText = text.trim();
+    await this.resolveDestination(destinationQuery(text));
+  }
+
+  private async resolveDestination(query: string): Promise<void> {
     const generation = this.generation;
     const revision = this.destinationRevision;
-    await this.say("The route is built.");
-    if (generation !== this.generation || revision !== this.destinationRevision || this.paused) return;
-    this.status = "Watching for scene changes";
+    if (!query) { await this.promptForDestination(); return; }
+    if (!this.navigator.configured) {
+      await this.say("Destination search is not set up on this phone.");
+      if (this.stale(generation, revision)) return;
+      await this.promptForDestination();
+      return;
+    }
+
+    await this.say(`Finding ${query}.`);
+    if (this.stale(generation, revision)) return;
+    const origin = await this.waitForFix();
+    if (this.stale(generation, revision)) return;
+    if (!origin) {
+      await this.say("I cannot get a location fix yet. Try again with a clearer view of the sky.");
+      if (this.stale(generation, revision)) return;
+      await this.promptForDestination();
+      return;
+    }
+
+    this.status = `Searching for ${query}`;
+    this.publish();
+    const result = await this.navigator.search(query, origin);
+    if (this.stale(generation, revision)) return;
+    await this.offerCandidate(result, query);
+  }
+
+  private async offerCandidate(result: DestinationSearchResult, query: string): Promise<void> {
+    const generation = this.generation;
+    const revision = this.destinationRevision;
+    if (result.kind !== "candidate") {
+      const message = result.kind === "error" ? result.message : `I could not find ${query} near you.`;
+      if (result.kind === "error") this.lastError = message;
+      await this.say(message);
+      if (this.stale(generation, revision)) return;
+      await this.promptForDestination();
+      return;
+    }
+
+    this.pendingCandidate = result.candidate;
+    this.status = "Confirming the destination";
+    const options = result.remaining > 0 ? ", or say next for another option" : "";
+    await this.say(`${result.description}. Say yes to go there${options}.`);
+    if (this.stale(generation, revision)) return;
+    this.awaitingConfirmation = true;
+    this.publish();
+  }
+
+  private async handleConfirmation(command: string): Promise<void> {
+    // A rejection wins when both words land in one phrase, so a "no" is never
+    // heard as agreement.
+    if (!NEXT_OPTION.test(command)) {
+      if (AFFIRMATIVE.test(command)) { await this.startSelectedRoute(); return; }
+      await this.say("Say yes to go there, or next for another option.");
+      return;
+    }
+
+    const generation = this.generation;
+    const revision = this.destinationRevision;
+    const origin = this.lastLocation;
+    this.awaitingConfirmation = false;
+    this.pendingCandidate = null;
+    if (!origin) { await this.promptForDestination(); return; }
+    const result = this.navigator.nextCandidate(origin);
+    if (result.kind === "none") {
+      await this.say("That was the last place I found.");
+      if (this.stale(generation, revision)) return;
+      await this.promptForDestination();
+      return;
+    }
+    await this.offerCandidate(result, "");
+  }
+
+  private async startSelectedRoute(): Promise<void> {
+    const candidate = this.pendingCandidate;
+    const origin = this.lastLocation;
+    this.awaitingConfirmation = false;
+    this.pendingCandidate = null;
+    if (!candidate || !origin) { await this.promptForDestination(); return; }
+
+    const generation = this.generation;
+    const revision = this.destinationRevision;
+    this.status = "Building the route";
+    this.publish();
+    await this.say("Building the route.", false);
+    if (this.stale(generation, revision)) return;
+    const result = await this.navigator.start(candidate, origin);
+    if (this.stale(generation, revision)) return;
+    if (result.kind === "error") {
+      this.lastError = result.message;
+      await this.say(result.message);
+      if (this.stale(generation, revision)) return;
+      await this.promptForDestination();
+      return;
+    }
+
+    this.destination = candidate.name;
+    await this.say(result.announcement);
+    if (this.stale(generation, revision)) return;
+    this.status = "Guiding you";
     this.camera.start();
     this.publish();
+  }
+
+  private handleLocationSample(sample: LocationSample): void {
+    this.lastLocation = sample;
+    if (!this.active || this.paused || this.navigator.activeRoute === null) return;
+    const update = this.navigator.handleLocation(sample);
+    if (update.announcement) this.announce(update.announcement);
+    if (update.offRoute) void this.handleOffRoute(sample);
+  }
+
+  private async handleOffRoute(sample: GuidanceLocation): Promise<void> {
+    if (this.rerouting) return;
+    this.rerouting = true;
+    try {
+      const result = await this.navigator.reroute(sample);
+      if (result.kind === "rerouted" || result.kind === "exhausted") {
+        this.announce(result.announcement);
+      } else if (result.kind === "error") {
+        this.lastError = result.message;
+        this.announce(result.message);
+      }
+    } finally {
+      this.rerouting = false;
+      this.publish();
+    }
+  }
+
+  /** Queued behind the scene pass so every camera frame still gets described. */
+  private announce(text: string): void {
+    this.pendingAnnouncement = text;
+    if (!this.announcing) void this.drainAnnouncements();
+  }
+
+  private async drainAnnouncements(): Promise<void> {
+    this.announcing = true;
+    try {
+      while (this.pendingAnnouncement !== null && this.active && !this.paused) {
+        while ((this.busy || this.speaking) && this.active && !this.paused) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        }
+        if (!this.active || this.paused) break;
+        const text = this.pendingAnnouncement;
+        this.pendingAnnouncement = null;
+        await this.say(text);
+      }
+    } finally {
+      this.announcing = false;
+    }
+  }
+
+  private async announcePosition(): Promise<void> {
+    const sample = this.lastLocation;
+    if (!sample) { await this.say("I do not have a location fix yet."); return; }
+    await this.say(this.navigator.describePosition(sample, this.deviceHeadingDeg));
+  }
+
+  private async waitForFix(): Promise<LocationSample | null> {
+    const deadline = monotonicNowMs() + FIX_WAIT_TIMEOUT_MS;
+    while (this.active && monotonicNowMs() < deadline) {
+      const sample = this.lastLocation;
+      if (sample && sample.accuracyM !== null && sample.accuracyM <= FIX_ACCURACY_TARGET_M) {
+        return sample;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 250));
+    }
+    // A coarse fix still biases the place search usefully, so it beats refusing.
+    return this.lastLocation;
+  }
+
+  private stale(generation: number, revision: number): boolean {
+    return (
+      !this.active ||
+      this.paused ||
+      generation !== this.generation ||
+      revision !== this.destinationRevision
+    );
   }
 
   private async processFrame(frame: CameraFrame): Promise<void> {
@@ -260,11 +495,24 @@ export class NavigationSessionController {
 
   async repeat(): Promise<void> {
     if (!this.active) return;
+    if (this.navigator.activeRoute !== null && this.destination !== null) {
+      this.paused = false;
+      await this.announcePosition();
+      return;
+    }
+    await this.promptForDestination();
+  }
+
+  async promptForDestination(): Promise<void> {
+    if (!this.active) return;
     const generation = this.generation;
     const revision = ++this.destinationRevision;
     this.camera.stop();
     this.cancelWork();
     this.destination = null;
+    this.pendingCandidate = null;
+    this.awaitingConfirmation = false;
+    this.navigator.reset();
     this.previousFrame = null;
     this.lastFrameAtMs = null;
     this.lastUserText = null;
@@ -298,6 +546,7 @@ export class NavigationSessionController {
   private cancelWork(): void {
     this.analysisAbort?.abort();
     this.analysisAbort = null;
+    this.pendingAnnouncement = null;
     this.busy = false;
     this.speechGeneration += 1;
     this.speech.cancel();
@@ -315,13 +564,19 @@ export class NavigationSessionController {
     this.connectReject = null;
     this.recognizer.close();
     this.camera.stop();
+    this.location.stop();
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.connection = "idle";
     this.status = "Assistant ended";
     await this.microphone.stop();
     await this.player.close();
-    await deactivateKeepAwake(KEEP_AWAKE_TAG);
+    try {
+      await deactivateKeepAwake(KEEP_AWAKE_TAG);
+    } catch {
+      // Ending on unmount or after the activity is gone rejects here, and the
+      // lock has already died with the activity.
+    }
     this.publish();
   }
 
@@ -337,4 +592,13 @@ export class NavigationSessionController {
   }
 
   private publish(): void { this.options.onSnapshot(this.getSnapshot()); }
+}
+
+const DESTINATION_PREFIX =
+  /^(?:please\s+)?(?:can you\s+|could you\s+)?(?:i (?:want|need|would like) to (?:go|get) to|take me to|navigate to|directions to|walk me to|guide me to|get me to|go to|take me|find)\s+/i;
+
+function destinationQuery(text: string): string {
+  const trimmed = text.trim().replace(/[.!?]+$/, "").trim();
+  const stripped = trimmed.replace(DESTINATION_PREFIX, "").trim();
+  return stripped || trimmed;
 }

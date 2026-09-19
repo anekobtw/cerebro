@@ -299,3 +299,39 @@ export const sessionOutdoorRouteSchema = z.object({
 });
 
 export type SessionOutdoorRoute = z.infer<typeof sessionOutdoorRouteSchema>;
+
+export const placeCandidateSchema = z.object({
+  placeId: z.string().min(1),
+  name: z.string().min(1),
+  address: z.string(),
+  position: geoPointSchema,
+});
+
+export type PlaceCandidate = z.infer<typeof placeCandidateSchema>;
+
+export const dynamicRouteStepSchema = z.object({
+  instructionText: z.string().min(1),
+  maneuver: z.string().nullable(),
+  distanceMeters: z.number().finite().nonnegative(),
+  start: geoPointSchema,
+  end: geoPointSchema,
+});
+
+export type DynamicRouteStep = z.infer<typeof dynamicRouteStepSchema>;
+
+/**
+ * A walking route to a destination the user named out loud. Unlike
+ * routeManifestSchema there is no survey behind it, so it carries no anchors,
+ * reference images, or indoor segments. Guidance ends at the arrival radius and
+ * hands off to the camera.
+ */
+export const dynamicRouteSchema = z.object({
+  destination: placeCandidateSchema,
+  geometry: z.array(geoPointSchema).min(2),
+  steps: z.array(dynamicRouteStepSchema).min(1),
+  distanceMeters: z.number().finite().nonnegative(),
+  estimatedDurationSeconds: z.number().finite().nonnegative().nullable(),
+  warnings: z.array(z.string()),
+});
+
+export type DynamicRoute = z.infer<typeof dynamicRouteSchema>;
