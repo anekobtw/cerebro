@@ -1,11 +1,9 @@
 # Cerebro
 
-![Cerebro campus navigation for blind students](assets/thumbnail.png)
+Cerebro is a voice-first navigation app designed to help visually impaired USF students move around campus more independently. It combines voice commands, walking directions, location tracking, and camera-based assistance to provide real-time spoken guidance.
 
 > [!NOTE]
 > Winners of the [BayHacks hackathon](https://www.tampabayinnovation.com/bay-hacks).
-
-Hackathon monorepo for the Cerebro mobile assistant. Development runs locally on a Pixel. The app connects directly to the configured cloud providers and has no Cerebro backend. The Android package was too large to include in the repository.
 
 ## Tech stack
 
