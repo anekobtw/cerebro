@@ -1,5 +1,10 @@
 # Cerebro
 
+![Cerebro campus navigation for blind students](assets/thumbnail.png)
+
+> [!NOTE]
+> Winners of the [BayHacks hackathon](https://www.tampabayinnovation.com/bay-hacks).
+
 Hackathon monorepo for the Cerebro mobile assistant. Development runs locally on a Pixel. The app connects directly to the configured cloud providers and has no Cerebro backend. The Android package was too large to include in the repository.
 
 ## Tech stack
