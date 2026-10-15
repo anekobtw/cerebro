@@ -1,9 +1,79 @@
-# Cerebro
+<p align="center">
+  <img src="docs/images/cerebro-logo.svg" alt="Cerebro logo" width="112">
+</p>
 
-Cerebro is a voice-first navigation app designed to help visually impaired USF students move around campus more independently. It combines voice commands, walking directions, location tracking, and camera-based assistance to provide real-time spoken guidance.
+<h1 align="center">Cerebro</h1>
 
-> [!NOTE]
-> Winners of the [BayHacks hackathon](https://www.tampabayinnovation.com/bay-hacks).
+<p align="center">
+  Voice-first campus navigation for blind and visually impaired USF students.
+  <br>
+  Winner of Best Use of ElevenLabs at <a href="https://www.tampabayinnovation.com/bay-hacks">Bay Hacks 2026</a>.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white" alt="Android">
+  <img src="https://img.shields.io/badge/Expo_SDK-57-000020?logo=expo&logoColor=white" alt="Expo SDK 57">
+  <img src="https://img.shields.io/badge/TypeScript-6.0-3178C6?logo=typescript&logoColor=white" alt="TypeScript 6.0">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=UgZ5OqgzG00">Demo video</a>
+  ·
+  <a href="https://devpost.com/software/cerebro-yixfr4">Devpost</a>
+</p>
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=UgZ5OqgzG00">
+    <img src="docs/images/cerebro-banner.jpg" alt="Cerebro: campus navigation for blind students. Click to watch the demo on YouTube." width="100%">
+  </a>
+</p>
+
+## About
+
+Cerebro (Spanish for "brain") is an Android app that guides blind and visually impaired students around the USF campus by voice. You say where you want to go. Cerebro finds the place with Google Places, gets walking directions from Google Routes, and speaks each turn through ElevenLabs. While you walk, the camera watches the path. When the view changes, ML Kit looks for obstacles on the phone first, and Gemini checks the frame only if ML Kit finds nothing. There are no menus to find on a screen.
+
+## Screenshots
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="docs/images/screenshots/destination.jpg" width="220" alt="Cerebro on a phone offering the USF Library, 335 metres away, and asking the user to say yes to go there"><br>
+        Confirming a destination
+      </td>
+      <td align="center">
+        <img src="docs/images/screenshots/guiding.jpg" width="220" alt="Cerebro telling the user to go left in a campus hallway"><br>
+        Walking directions
+      </td>
+      <td align="center">
+        <img src="docs/images/screenshots/ended.jpg" width="220" alt="Cerebro showing Assistant ended at the Bay Hacks venue"><br>
+        Session ended
+      </td>
+    </tr>
+  </table>
+</div>
+
+## Team
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center" width="160">
+        <a href="https://github.com/kharitonov-egor">
+          <img src="https://github.com/kharitonov-egor.png?size=160" width="80" alt=""><br>
+          <b>Egor Kharitonov</b>
+        </a>
+      </td>
+      <td align="center" width="160">
+        <a href="https://github.com/anekobtw">
+          <img src="https://github.com/anekobtw.png?size=160" width="80" alt=""><br>
+          <b>Elmar Sabitov</b>
+        </a>
+      </td>
+    </tr>
+  </table>
+</div>
 
 ## Tech stack
 
